@@ -64,4 +64,7 @@ class ExpenseTrackerRuntime:
             await sensor.async_refresh()
 
     async def _async_notify_types_changed(self) -> None:
-        """Filled in by Task 10 (script_sync)."""
+        from .script_sync import async_sync_script
+
+        type_names = [name for name, _icon in await self.async_list_types()]
+        await async_sync_script(self.hass, type_names)

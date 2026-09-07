@@ -1,6 +1,11 @@
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.expense_tracker.const import DOMAIN
+
+# async_setup_entry now syncs the add-expense helper script at startup
+# (Task 10), which calls the real script.reload service.
+pytestmark = pytest.mark.usefixtures("stub_script_reload")
 
 
 async def test_setup_entry_creates_runtime_and_initializes_db(hass, tmp_path):

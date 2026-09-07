@@ -22,6 +22,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = runtime
     async_register_services(hass, runtime)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    from .script_sync import async_sync_script
+
+    type_names = [name for name, _icon in await runtime.async_list_types()]
+    await async_sync_script(hass, type_names)
+
     return True
 
 

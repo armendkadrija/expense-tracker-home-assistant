@@ -8,6 +8,10 @@ from homeassistant.exceptions import ServiceValidationError
 
 from custom_components.expense_tracker.const import DOMAIN, RECEIPTS_DIR
 
+# add_type/remove_type now sync the add-expense helper script (Task 10),
+# which calls the real script.reload service; startup does too.
+pytestmark = pytest.mark.usefixtures("stub_script_reload")
+
 
 async def _setup(hass, tmp_path):
     hass.config.config_dir = str(tmp_path)
