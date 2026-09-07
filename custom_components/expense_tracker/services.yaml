@@ -1,0 +1,64 @@
+add_expense:
+  name: Add expense
+  description: Log a new expense.
+  fields:
+    amount:
+      required: true
+      selector:
+        number:
+          min: 0
+          mode: box
+    type:
+      required: true
+      selector:
+        text:
+    user:
+      required: true
+      selector:
+        entity:
+          domain: person
+    date:
+      required: false
+      selector:
+        date:
+    receipt:
+      required: false
+      selector:
+        image:
+    note:
+      required: false
+      selector:
+        text:
+
+add_type:
+  name: Add expense type
+  description: Register a new expense type.
+  fields:
+    name:
+      required: true
+      selector:
+        text:
+    icon:
+      required: true
+      selector:
+        icon:
+
+remove_type:
+  name: Remove expense type
+  description: >
+    Remove an expense type. Existing expenses keep their historical type
+    name.
+  fields:
+    name:
+      required: true
+      selector:
+        text:
+
+remove_expense:
+  name: Remove expense
+  description: Delete an expense and its receipt file, if any.
+  fields:
+    id:
+      required: true
+      selector:
+        text:
