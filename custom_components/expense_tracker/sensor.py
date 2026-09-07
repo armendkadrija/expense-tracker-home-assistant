@@ -1,14 +1,13 @@
 """Sensor platform for the Expense Tracker integration."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
+from .dt_helpers import start_of_current_month_utc
 from .runtime import ExpenseTrackerRuntime
 
 
@@ -27,10 +26,7 @@ async def async_setup_entry(
 
 
 def _start_of_month_iso() -> str:
-    now = datetime.now(timezone.utc)
-    return now.replace(
-        day=1, hour=0, minute=0, second=0, microsecond=0
-    ).isoformat()
+    return start_of_current_month_utc().isoformat()
 
 
 class ExpenseTrackerTotalSensor(SensorEntity):

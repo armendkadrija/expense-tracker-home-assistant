@@ -6,6 +6,7 @@ import yaml
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.util import dt as dt_util
 
 from custom_components.expense_tracker.const import (
     DOMAIN,
@@ -119,6 +120,36 @@ async def test_add_expense_accepts_explicit_none_for_optional_fields(hass, tmp_p
 
     total = hass.states.get("sensor.expense_tracker_total")
     assert float(total.state) == 3.0
+
+
+async def test_add_expense_backdated_to_first_of_month_counts_in_month_total(
+    hass, tmp_path
+):
+    """Regression test for the reviewer-found bug: a bare date string
+    (what the real `date` selector actually produces, e.g. "2026-09-01")
+    must be normalized to a full UTC ISO timestamp before being stored,
+    and the "this month" sensor's boundary must be computed in the
+    configured local timezone (the test harness's `hass` fixture sets
+    US/Pacific) -- not UTC -- so this backdated expense isn't silently
+    excluded by a string comparison quirk or a shifted month boundary.
+    """
+    await _setup(hass, tmp_path)
+    first_of_month = dt_util.now().strftime("%Y-%m-01")
+
+    await hass.services.async_call(
+        DOMAIN,
+        "add_expense",
+        {
+            "amount": 42.0,
+            "type": "Groceries",
+            "user": "person.armend",
+            "date": first_of_month,
+        },
+        blocking=True,
+    )
+
+    month_total = hass.states.get("sensor.expense_tracker_total_this_month")
+    assert float(month_total.state) == 42.0
 
 
 async def test_add_type_then_remove_type_service(hass, tmp_path):

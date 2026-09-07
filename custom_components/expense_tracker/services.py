@@ -12,6 +12,7 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN
 from .db import DuplicateTypeError, UnknownExpenseError, UnknownTypeError
+from .dt_helpers import local_date_string_to_utc_iso
 from .receipts import async_delete_receipt, async_save_receipt
 from .runtime import ExpenseTrackerRuntime
 
@@ -44,7 +45,16 @@ REMOVE_EXPENSE_SCHEMA = vol.Schema({vol.Required("id"): cv.string})
 def async_register_services(hass: HomeAssistant, runtime: ExpenseTrackerRuntime) -> None:
     async def handle_add_expense(call: ServiceCall) -> None:
         expense_id = str(uuid.uuid4())
-        timestamp = call.data.get("date") or datetime.now(timezone.utc).isoformat()
+        raw_date = call.data.get("date")
+        if raw_date:
+            # The `date` selector hands us a bare "YYYY-MM-DD" string with
+            # no time/timezone. Normalize it to a full UTC ISO timestamp
+            # so it sorts and compares correctly against the full ISO
+            # timestamps used for undated expenses (db.get_totals does a
+            # plain string >= comparison against `since`).
+            timestamp = local_date_string_to_utc_iso(raw_date)
+        else:
+            timestamp = datetime.now(timezone.utc).isoformat()
 
         # Validate the type BEFORE touching the receipt file. Saving the
         # receipt first would leave an orphaned file on disk if the type
