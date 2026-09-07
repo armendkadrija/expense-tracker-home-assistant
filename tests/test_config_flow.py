@@ -1,6 +1,13 @@
+import pytest
 from homeassistant import config_entries, data_entry_flow
 
 from custom_components.expense_tracker.const import DOMAIN
+
+# CREATE_ENTRY here drives a full config-entry setup (async_setup_entry),
+# which now syncs the add-expense helper script at startup (Task 10) via
+# the real script.reload service. Without this stub, ServiceNotFound is
+# raised and silently swallowed by config-entries setup machinery.
+pytestmark = pytest.mark.usefixtures("stub_script_reload")
 
 
 async def test_user_flow_creates_single_entry(hass):
