@@ -24,7 +24,8 @@ add_expense:
     receipt:
       required: false
       selector:
-        image:
+        file:
+          accept: "image/*"
     note:
       required: false
       selector:

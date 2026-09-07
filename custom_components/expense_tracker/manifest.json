@@ -3,6 +3,7 @@
   "name": "Expense Tracker",
   "version": "0.1.0",
   "config_flow": true,
+  "dependencies": ["file_upload"],
   "documentation": "https://github.com/armendkadrija/expense-tracker-home-assistant",
   "requirements": [],
   "codeowners": ["@armendkadrija"],
