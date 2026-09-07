@@ -25,9 +25,13 @@ ADD_EXPENSE_SCHEMA = vol.Schema(
         vol.Required("amount"): vol.All(vol.Coerce(float), vol.Range(min=0)),
         vol.Required("type"): cv.string,
         vol.Required("user"): cv.entity_id,
-        vol.Optional("date"): cv.string,
-        vol.Optional("receipt"): cv.string,
-        vol.Optional("note"): cv.string,
+        # The script wrapper's sequence renders blank optional fields as a
+        # real Jinja/Python None (e.g. "{{ date | default(None) }}"), not
+        # an omitted key. cv.string rejects None outright, so these must
+        # explicitly allow it.
+        vol.Optional("date"): vol.Any(None, cv.string),
+        vol.Optional("receipt"): vol.Any(None, cv.string),
+        vol.Optional("note"): vol.Any(None, cv.string),
     }
 )
 ADD_TYPE_SCHEMA = vol.Schema(

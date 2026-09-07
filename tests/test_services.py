@@ -94,6 +94,33 @@ async def test_add_expense_unknown_type_with_receipt_writes_no_orphaned_file(
         assert os.listdir(receipts_root) == []
 
 
+async def test_add_expense_accepts_explicit_none_for_optional_fields(hass, tmp_path):
+    """Regression test for the real bug: when a script field is left
+    blank, HA's template rendering (`{{ date | default(None) }}`) produces
+    a real Python None, not an omitted key. cv.string rejects None
+    outright ("string value is None"), so a blank optional field on the
+    dashboard form would previously blow up the whole call.
+    """
+    await _setup(hass, tmp_path)
+
+    await hass.services.async_call(
+        DOMAIN,
+        "add_expense",
+        {
+            "amount": 3.0,
+            "type": "Groceries",
+            "user": "person.armend",
+            "date": None,
+            "receipt": None,
+            "note": None,
+        },
+        blocking=True,
+    )
+
+    total = hass.states.get("sensor.expense_tracker_total")
+    assert float(total.state) == 3.0
+
+
 async def test_add_type_then_remove_type_service(hass, tmp_path):
     await _setup(hass, tmp_path)
 
