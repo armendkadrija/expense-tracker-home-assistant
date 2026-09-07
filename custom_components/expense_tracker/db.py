@@ -81,3 +81,15 @@ class ExpenseDB:
             conn.commit()
         finally:
             conn.close()
+
+    def remove_type(self, name: str) -> None:
+        conn = sqlite3.connect(self._db_path)
+        try:
+            cursor = conn.execute(
+                "DELETE FROM expense_types WHERE name = ?", (name,)
+            )
+            if cursor.rowcount == 0:
+                raise UnknownTypeError(f"Type '{name}' does not exist")
+            conn.commit()
+        finally:
+            conn.close()
