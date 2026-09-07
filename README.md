@@ -16,11 +16,16 @@ home-assistant repo for the full design rationale.
 
 The integration maintains a dedicated script config file so the "Add
 expense" dashboard form always shows your current expense types. Add this
-line under a `script` key in `configuration.yaml`:
+as its own top-level key in `configuration.yaml`, alongside (not nested
+inside) any existing `script:` key you may already have:
 
 ```yaml
 script expense_tracker: !include expense_tracker_scripts.yaml
 ```
+
+HA merges multiple differently-suffixed `script <label>:` top-level keys
+together (the same mechanism `automation ui:` / `automation manual:` use),
+so this line lives next to — never inside — your own `script:` block.
 
 Restart Home Assistant once after adding this line.
 
@@ -44,3 +49,13 @@ Actions:
 `expense_tracker.remove_expense` with the expense's `id` deletes the row
 and its receipt file. Find the `id` via the SQLite file directly:
 `<config>/expense_tracker/expenses.db`.
+
+## A note on receipt privacy
+
+Receipt images are served from `/local/expense_tracker/receipts/...` like
+any other file under `www/` — with no authentication. Filenames are the
+expense's uuid4 id, so they aren't guessable, and this isn't currently
+exploitable in practice. Still worth knowing since this integration
+stores financial records: anyone who obtains a receipt's exact URL (e.g.
+via a shared link, browser history, or a proxy log) can view it without
+logging in.
