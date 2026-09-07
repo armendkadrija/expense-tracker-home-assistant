@@ -2,6 +2,9 @@
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from homeassistant.components.sensor import SensorDeviceClass
+from homeassistant.util import dt as dt_util
+
 from custom_components.expense_tracker.const import DOMAIN
 
 # async_setup_entry now syncs the add-expense helper script at startup
@@ -44,3 +47,55 @@ async def test_sensor_updates_after_add_expense(hass, tmp_path):
     total = hass.states.get("sensor.expense_tracker_total")
     assert float(total.state) == 9.5
     assert total.attributes["by_type"] == {"Groceries": 9.5}
+
+
+async def test_sensors_have_monetary_device_class_and_precision(hass, tmp_path):
+    hass.config.config_dir = str(tmp_path)
+    entry = MockConfigEntry(domain=DOMAIN)
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    for entity_id in (
+        "sensor.expense_tracker_total",
+        "sensor.expense_tracker_total_this_month",
+    ):
+        state = hass.states.get(entity_id)
+        assert state.attributes["device_class"] == SensorDeviceClass.MONETARY
+
+    # suggested_display_precision only affects display/registry options,
+    # not the raw state attributes dict - check it directly on the
+    # entities the runtime is tracking.
+    runtime = hass.data[DOMAIN][entry.entry_id]
+    for sensor in runtime.sensors:
+        assert sensor.suggested_display_precision == 2
+
+
+async def test_month_sensor_sets_last_reset_to_start_of_month(hass, tmp_path):
+    hass.config.config_dir = str(tmp_path)
+    entry = MockConfigEntry(domain=DOMAIN)
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    month_state = hass.states.get("sensor.expense_tracker_total_this_month")
+    last_reset = dt_util.parse_datetime(month_state.attributes["last_reset"])
+    assert last_reset is not None
+
+    local_now = dt_util.now()
+    expected_local_start = local_now.replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0
+    )
+    assert dt_util.as_local(last_reset) == expected_local_start
+
+
+async def test_total_sensor_exposes_types_attribute(hass, tmp_path):
+    hass.config.config_dir = str(tmp_path)
+    entry = MockConfigEntry(domain=DOMAIN)
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    total = hass.states.get("sensor.expense_tracker_total")
+    assert total.attributes["types"]["Groceries"] == "mdi:cart"
+    assert total.attributes["types"]["Transport"] == "mdi:car"

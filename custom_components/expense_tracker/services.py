@@ -12,6 +12,7 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN
 from .db import DuplicateTypeError, UnknownExpenseError, UnknownTypeError
+from .dt_helpers import local_date_string_to_utc_iso
 from .receipts import async_delete_receipt, async_save_receipt
 from .runtime import ExpenseTrackerRuntime
 
@@ -25,9 +26,13 @@ ADD_EXPENSE_SCHEMA = vol.Schema(
         vol.Required("amount"): vol.All(vol.Coerce(float), vol.Range(min=0)),
         vol.Required("type"): cv.string,
         vol.Required("user"): cv.entity_id,
-        vol.Optional("date"): cv.string,
-        vol.Optional("receipt"): cv.string,
-        vol.Optional("note"): cv.string,
+        # The script wrapper's sequence renders blank optional fields as a
+        # real Jinja/Python None (e.g. "{{ date | default(None) }}"), not
+        # an omitted key. cv.string rejects None outright, so these must
+        # explicitly allow it.
+        vol.Optional("date"): vol.Any(None, cv.string),
+        vol.Optional("receipt"): vol.Any(None, cv.string),
+        vol.Optional("note"): vol.Any(None, cv.string),
     }
 )
 ADD_TYPE_SCHEMA = vol.Schema(
@@ -40,7 +45,16 @@ REMOVE_EXPENSE_SCHEMA = vol.Schema({vol.Required("id"): cv.string})
 def async_register_services(hass: HomeAssistant, runtime: ExpenseTrackerRuntime) -> None:
     async def handle_add_expense(call: ServiceCall) -> None:
         expense_id = str(uuid.uuid4())
-        timestamp = call.data.get("date") or datetime.now(timezone.utc).isoformat()
+        raw_date = call.data.get("date")
+        if raw_date:
+            # The `date` selector hands us a bare "YYYY-MM-DD" string with
+            # no time/timezone. Normalize it to a full UTC ISO timestamp
+            # so it sorts and compares correctly against the full ISO
+            # timestamps used for undated expenses (db.get_totals does a
+            # plain string >= comparison against `since`).
+            timestamp = local_date_string_to_utc_iso(raw_date)
+        else:
+            timestamp = datetime.now(timezone.utc).isoformat()
 
         # Validate the type BEFORE touching the receipt file. Saving the
         # receipt first would leave an orphaned file on disk if the type
@@ -56,20 +70,31 @@ def async_register_services(hass: HomeAssistant, runtime: ExpenseTrackerRuntime)
                 hass, expense_id, call.data["receipt"]
             )
         try:
-            await runtime.async_add_expense(
-                expense_id=expense_id,
-                amount=call.data["amount"],
-                type_name=type_name,
-                user=call.data["user"],
-                timestamp=timestamp,
-                receipt_path=receipt_path,
-                note=call.data.get("note"),
-            )
-        except UnknownTypeError as err:
-            # Defensive fallback only: the membership check above already
-            # guards against this, but async_add_expense re-validates on
-            # its own so it stays correct if ever called from elsewhere.
-            raise ServiceValidationError(str(err)) from err
+            try:
+                await runtime.async_add_expense(
+                    expense_id=expense_id,
+                    amount=call.data["amount"],
+                    type_name=type_name,
+                    user=call.data["user"],
+                    timestamp=timestamp,
+                    receipt_path=receipt_path,
+                    note=call.data.get("note"),
+                )
+            except UnknownTypeError as err:
+                # Defensive fallback only: the membership check above
+                # already guards against this, but async_add_expense
+                # re-validates on its own so it stays correct if ever
+                # called from elsewhere.
+                raise ServiceValidationError(str(err)) from err
+        except Exception:
+            # If the DB write fails for ANY reason (not just the
+            # UnknownTypeError case above) after a receipt was already
+            # saved, that file would otherwise orphan on disk with
+            # nothing ever pointing at it. Clean it up, then let
+            # whatever error resulted keep propagating unchanged.
+            if receipt_path:
+                await async_delete_receipt(hass, receipt_path)
+            raise
 
     async def handle_add_type(call: ServiceCall) -> None:
         try:

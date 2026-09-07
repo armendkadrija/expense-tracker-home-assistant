@@ -35,7 +35,10 @@ def _build_script_config(type_names: list[str]) -> dict:
                     "selector": {"entity": {"domain": "person"}},
                 },
                 "date": {"required": False, "selector": {"date": {}}},
-                "receipt": {"required": False, "selector": {"image": {}}},
+                "receipt": {
+                    "required": False,
+                    "selector": {"file": {"accept": "image/*"}},
+                },
                 "note": {"required": False, "selector": {"text": {}}},
             },
             "sequence": [

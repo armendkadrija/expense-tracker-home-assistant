@@ -10,6 +10,14 @@ import sqlite3
 
 from .const import DEFAULT_TYPES, SCHEMA_VERSION
 
+# Migrations as plain SQL strings, indexed by version: MIGRATIONS[i] is
+# the migration that takes the schema from version i to version i + 1.
+# No ORM, no migration framework - PRAGMA user_version plus this list is
+# the whole mechanism. Empty today (the schema hasn't changed since the
+# initial CREATE TABLE below), but initialize() already runs whatever
+# lands here for future SCHEMA_VERSION bumps.
+MIGRATIONS: list[str] = []
+
 
 class DuplicateTypeError(ValueError):
     """Raised when adding a type whose name already exists."""
@@ -42,6 +50,8 @@ class ExpenseDB:
                 "receipt_path TEXT, note TEXT, timestamp TEXT NOT NULL)"
             )
             version = conn.execute("PRAGMA user_version").fetchone()[0]
+            for migration_sql in MIGRATIONS[version:SCHEMA_VERSION]:
+                conn.execute(migration_sql)
             if version < SCHEMA_VERSION:
                 conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             count = conn.execute(

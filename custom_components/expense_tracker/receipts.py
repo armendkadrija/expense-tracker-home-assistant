@@ -1,45 +1,57 @@
-"""Receipt file storage for the Expense Tracker integration."""
+"""Receipt file storage for the Expense Tracker integration.
+
+Receipts arrive via HA's native `file` selector (see script_sync.py and
+services.yaml), which hands the handler a `file_id` string referencing a
+file the `file_upload` integration is holding in a temp directory — not a
+base64 payload. `homeassistant.components.file_upload.process_uploaded_file`
+is the public, documented way to get at that file's real path; it deletes
+the temp file when its `with` block exits, so we must copy the bytes we
+want to keep before the block ends. This mirrors the pattern used by HA's
+own `local_calendar` config flow (`save_uploaded_ics_file`): the whole
+`with process_uploaded_file(...)` block runs inside a single
+`hass.async_add_executor_job` call, since `process_uploaded_file` itself
+is a synchronous context manager and its exit does blocking file I/O.
+"""
 from __future__ import annotations
 
-import base64
 import os
+import shutil
 
+from homeassistant.components.file_upload import process_uploaded_file
 from homeassistant.core import HomeAssistant
 
 from .const import RECEIPTS_DIR
 
 
-def _write_receipt_file(
-    receipts_root: str, expense_id: str, image_bytes: bytes, ext: str
+def _save_uploaded_receipt(
+    hass: HomeAssistant, receipts_root: str, expense_id: str, file_id: str
 ) -> str:
     os.makedirs(receipts_root, exist_ok=True)
-    filename = f"{expense_id}.{ext}"
-    with open(os.path.join(receipts_root, filename), "wb") as f:
-        f.write(image_bytes)
+    with process_uploaded_file(hass, file_id) as file_path:
+        ext = file_path.suffix.lstrip(".") or "jpg"
+        filename = f"{expense_id}.{ext}"
+        shutil.copyfile(file_path, os.path.join(receipts_root, filename))
     return f"{RECEIPTS_DIR}/{filename}"
 
 
 def _delete_receipt_file(config_root: str, relative_path: str) -> None:
-    full_path = os.path.join(config_root, relative_path)
+    config_root_real = os.path.realpath(config_root)
+    full_path = os.path.realpath(os.path.join(config_root, relative_path))
+    if os.path.commonpath([config_root_real, full_path]) != config_root_real:
+        # relative_path escapes config_root (e.g. via "../"). Never
+        # delete outside the config directory.
+        return
     if os.path.exists(full_path):
         os.remove(full_path)
 
 
-async def async_save_receipt(
-    hass: HomeAssistant, expense_id: str, image_data_url: str
-) -> str:
-    """image_data_url is the raw value from HA's `image` selector: a
-    base64 string, optionally prefixed 'data:image/<ext>;base64,'."""
-    if image_data_url.startswith("data:") and "," in image_data_url:
-        header, encoded = image_data_url.split(",", 1)
-        ext = header.split("/")[1].split(";")[0] if "/" in header else "jpg"
-    else:
-        encoded = image_data_url
-        ext = "jpg"
-    image_bytes = base64.b64decode(encoded)
+async def async_save_receipt(hass: HomeAssistant, expense_id: str, file_id: str) -> str:
+    """Save the uploaded file referenced by `file_id` (the value produced
+    by HA's `file` selector) as this expense's receipt, returning its path
+    relative to the config directory."""
     receipts_root = hass.config.path(RECEIPTS_DIR)
     return await hass.async_add_executor_job(
-        _write_receipt_file, receipts_root, expense_id, image_bytes, ext
+        _save_uploaded_receipt, hass, receipts_root, expense_id, file_id
     )
 
 

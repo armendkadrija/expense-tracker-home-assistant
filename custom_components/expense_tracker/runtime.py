@@ -21,11 +21,11 @@ class ExpenseTrackerRuntime:
 
     async def async_add_type(self, name: str, icon: str) -> None:
         await self.hass.async_add_executor_job(self.db.add_type, name, icon)
-        await self._async_notify_types_changed()
+        await self.async_sync_script_now()
 
     async def async_remove_type(self, name: str) -> None:
         await self.hass.async_add_executor_job(self.db.remove_type, name)
-        await self._async_notify_types_changed()
+        await self.async_sync_script_now()
 
     async def async_add_expense(
         self,
@@ -63,7 +63,15 @@ class ExpenseTrackerRuntime:
         for sensor in self.sensors:
             await sensor.async_refresh()
 
-    async def _async_notify_types_changed(self) -> None:
+    async def async_sync_script_now(self) -> None:
+        """(Re)write the add-expense helper script's `type` field options
+        to match the current expense_types list, and reload it via the
+        `script` component. Shared by add_type/remove_type and the
+        one-time startup sync in __init__.py -- callers that need setup
+        to survive a missing `script` component (i.e. __init__.py) must
+        catch homeassistant.exceptions.ServiceNotFound themselves; this
+        method does not swallow it, since add_type/remove_type callers
+        should see that failure."""
         from .script_sync import async_sync_script
 
         type_names = [name for name, _icon in await self.async_list_types()]

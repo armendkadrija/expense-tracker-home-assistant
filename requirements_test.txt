@@ -1,2 +1,7 @@
-pytest-homeassistant-custom-component
-pytest-asyncio
+pytest-homeassistant-custom-component==0.13.316
+pytest-asyncio==1.3.0
+# homeassistant is a transitive dependency of
+# pytest-homeassistant-custom-component, pinned explicitly here too so a
+# future reinstall can't silently swap the HA version this integration
+# is tested against out from under it.
+homeassistant==2026.2.3
