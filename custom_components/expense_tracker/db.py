@@ -62,7 +62,7 @@ class ExpenseDB:
             rows = conn.execute(
                 "SELECT name, icon FROM expense_types ORDER BY name"
             ).fetchall()
-            return [(row[0], row[1]) for row in rows]
+            return rows
         finally:
             conn.close()
 
