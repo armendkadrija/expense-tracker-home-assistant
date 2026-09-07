@@ -160,7 +160,7 @@ async def test_add_type_then_remove_type_service(hass, tmp_path):
         blocking=True,
     )
 
-    # Proves the add_type -> runtime._async_notify_types_changed ->
+    # Proves the add_type -> runtime.async_sync_script_now ->
     # async_sync_script wiring actually fired (Task 10, Finding 2): the
     # real script-sync file on disk must now list the new type.
     assert "Subscriptions" in _script_type_options(hass)
