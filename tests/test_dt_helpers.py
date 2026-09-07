@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from homeassistant.util import dt as dt_util
 
 from custom_components.expense_tracker.dt_helpers import (
