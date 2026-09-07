@@ -93,3 +93,78 @@ class ExpenseDB:
             conn.commit()
         finally:
             conn.close()
+
+    def add_expense(
+        self,
+        expense_id: str,
+        amount: float,
+        type_name: str,
+        user: str,
+        timestamp: str,
+        receipt_path: str | None = None,
+        note: str | None = None,
+    ) -> None:
+        conn = sqlite3.connect(self._db_path)
+        try:
+            existing = conn.execute(
+                "SELECT 1 FROM expense_types WHERE name = ?", (type_name,)
+            ).fetchone()
+            if not existing:
+                raise UnknownTypeError(f"Type '{type_name}' does not exist")
+            conn.execute(
+                "INSERT INTO expenses "
+                "(id, amount, type_name, user, receipt_path, note, timestamp) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (expense_id, amount, type_name, user, receipt_path, note, timestamp),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def remove_expense(self, expense_id: str) -> str | None:
+        conn = sqlite3.connect(self._db_path)
+        try:
+            row = conn.execute(
+                "SELECT receipt_path FROM expenses WHERE id = ?", (expense_id,)
+            ).fetchone()
+            if row is None:
+                raise UnknownExpenseError(f"Expense '{expense_id}' does not exist")
+            conn.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
+            conn.commit()
+            return row[0]
+        finally:
+            conn.close()
+
+    def get_totals(self, since: str | None = None) -> dict:
+        conn = sqlite3.connect(self._db_path)
+        try:
+            where = "WHERE timestamp >= ?" if since else ""
+            params = (since,) if since else ()
+            total = conn.execute(
+                f"SELECT COALESCE(SUM(amount), 0) FROM expenses {where}", params
+            ).fetchone()[0]
+            count = conn.execute(
+                f"SELECT COUNT(*) FROM expenses {where}", params
+            ).fetchone()[0]
+            by_type = dict(
+                conn.execute(
+                    f"SELECT type_name, SUM(amount) FROM expenses {where} "
+                    "GROUP BY type_name",
+                    params,
+                ).fetchall()
+            )
+            by_user = dict(
+                conn.execute(
+                    f"SELECT user, SUM(amount) FROM expenses {where} "
+                    "GROUP BY user",
+                    params,
+                ).fetchall()
+            )
+            return {
+                "total": total,
+                "count": count,
+                "by_type": by_type,
+                "by_user": by_user,
+            }
+        finally:
+            conn.close()
