@@ -72,10 +72,10 @@ async def test_add_expense_unknown_type_with_receipt_writes_no_orphaned_file(
 ):
     """Regression test for the receipt-ordering bug: the type must be
     validated BEFORE the receipt file is saved, so a rejected call must
-    never leave an orphaned receipt file on disk."""
+    never leave an orphaned receipt file on disk. (Type validation fails
+    before the receipt field is ever touched, so a fake, never-resolved
+    file_id is fine here.)"""
     await _setup(hass, tmp_path)
-
-    fake_image = base64.b64encode(b"fake image bytes").decode()
 
     with pytest.raises(ServiceValidationError):
         await hass.services.async_call(
@@ -85,7 +85,7 @@ async def test_add_expense_unknown_type_with_receipt_writes_no_orphaned_file(
                 "amount": 1.0,
                 "type": "NotAType",
                 "user": "person.armend",
-                "receipt": f"data:image/jpg;base64,{fake_image}",
+                "receipt": "fake-never-resolved-file-id",
             },
             blocking=True,
         )
@@ -93,6 +93,40 @@ async def test_add_expense_unknown_type_with_receipt_writes_no_orphaned_file(
     receipts_root = os.path.join(str(tmp_path), RECEIPTS_DIR)
     if os.path.exists(receipts_root):
         assert os.listdir(receipts_root) == []
+
+
+async def test_add_expense_deletes_receipt_when_add_expense_raises_any_error(
+    hass, tmp_path, stage_uploaded_file, monkeypatch
+):
+    """M4 regression: previously only the specific UnknownTypeError path
+    (already unreachable here since the type is validated up front) was
+    guarded. If runtime.async_add_expense fails for ANY reason after a
+    receipt was already saved, that receipt file must not be left
+    orphaned on disk."""
+    entry = await _setup(hass, tmp_path)
+    runtime = hass.data[DOMAIN][entry.entry_id]
+    file_id = await stage_uploaded_file("receipt.jpg", b"receipt-bytes")
+
+    async def _boom(**kwargs):
+        raise RuntimeError("simulated database failure")
+
+    monkeypatch.setattr(runtime, "async_add_expense", _boom)
+
+    with pytest.raises(RuntimeError):
+        await hass.services.async_call(
+            DOMAIN,
+            "add_expense",
+            {
+                "amount": 1.0,
+                "type": "Groceries",
+                "user": "person.armend",
+                "receipt": file_id,
+            },
+            blocking=True,
+        )
+
+    receipts_root = os.path.join(str(tmp_path), RECEIPTS_DIR)
+    assert not os.path.exists(receipts_root) or os.listdir(receipts_root) == []
 
 
 async def test_add_expense_accepts_explicit_none_for_optional_fields(hass, tmp_path):

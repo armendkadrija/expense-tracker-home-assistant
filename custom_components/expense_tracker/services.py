@@ -70,20 +70,31 @@ def async_register_services(hass: HomeAssistant, runtime: ExpenseTrackerRuntime)
                 hass, expense_id, call.data["receipt"]
             )
         try:
-            await runtime.async_add_expense(
-                expense_id=expense_id,
-                amount=call.data["amount"],
-                type_name=type_name,
-                user=call.data["user"],
-                timestamp=timestamp,
-                receipt_path=receipt_path,
-                note=call.data.get("note"),
-            )
-        except UnknownTypeError as err:
-            # Defensive fallback only: the membership check above already
-            # guards against this, but async_add_expense re-validates on
-            # its own so it stays correct if ever called from elsewhere.
-            raise ServiceValidationError(str(err)) from err
+            try:
+                await runtime.async_add_expense(
+                    expense_id=expense_id,
+                    amount=call.data["amount"],
+                    type_name=type_name,
+                    user=call.data["user"],
+                    timestamp=timestamp,
+                    receipt_path=receipt_path,
+                    note=call.data.get("note"),
+                )
+            except UnknownTypeError as err:
+                # Defensive fallback only: the membership check above
+                # already guards against this, but async_add_expense
+                # re-validates on its own so it stays correct if ever
+                # called from elsewhere.
+                raise ServiceValidationError(str(err)) from err
+        except Exception:
+            # If the DB write fails for ANY reason (not just the
+            # UnknownTypeError case above) after a receipt was already
+            # saved, that file would otherwise orphan on disk with
+            # nothing ever pointing at it. Clean it up, then let
+            # whatever error resulted keep propagating unchanged.
+            if receipt_path:
+                await async_delete_receipt(hass, receipt_path)
+            raise
 
     async def handle_add_type(call: ServiceCall) -> None:
         try:
