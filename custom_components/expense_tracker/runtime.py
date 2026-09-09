@@ -22,10 +22,16 @@ class ExpenseTrackerRuntime:
     async def async_add_type(self, name: str, icon: str) -> None:
         await self.hass.async_add_executor_job(self.db.add_type, name, icon)
         await self.async_sync_script_now()
+        # The sensors' `types` attribute is the live source other config
+        # (e.g. a helper synced by an automation) reads the current type
+        # list from -- it must update immediately, not just lag behind
+        # until the next expense is logged.
+        await self._async_refresh_sensors()
 
     async def async_remove_type(self, name: str) -> None:
         await self.hass.async_add_executor_job(self.db.remove_type, name)
         await self.async_sync_script_now()
+        await self._async_refresh_sensors()
 
     async def async_add_expense(
         self,

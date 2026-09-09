@@ -221,6 +221,29 @@ async def test_add_expense_backdated_to_first_of_month_counts_in_month_total(
     assert float(month_total.state) == 42.0
 
 
+async def test_add_type_updates_sensor_types_attribute_immediately(hass, tmp_path):
+    """The sensors' `types` attribute must reflect a new type right away,
+    not just after the next expense is logged -- other config (e.g. a
+    helper kept in sync by an automation) reads the live type list from
+    here."""
+    await _setup(hass, tmp_path)
+
+    await hass.services.async_call(
+        DOMAIN, "add_type", {"name": "Subscriptions", "icon": "mdi:credit-card"},
+        blocking=True,
+    )
+
+    total = hass.states.get("sensor.expense_tracker_total")
+    assert "Subscriptions" in total.attributes["types"]
+
+    await hass.services.async_call(
+        DOMAIN, "remove_type", {"name": "Subscriptions"}, blocking=True
+    )
+
+    total = hass.states.get("sensor.expense_tracker_total")
+    assert "Subscriptions" not in total.attributes["types"]
+
+
 async def test_add_type_then_remove_type_service(hass, tmp_path):
     await _setup(hass, tmp_path)
 
