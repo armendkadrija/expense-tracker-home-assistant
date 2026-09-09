@@ -35,12 +35,6 @@ def _build_script_config(type_names: list[str]) -> dict:
                     "required": True,
                     "selector": {"number": {"min": 0, "mode": "box"}},
                 },
-                "user": {
-                    "name": "Who",
-                    "description": "Who this expense belongs to.",
-                    "required": True,
-                    "selector": {"entity": {"domain": "person"}},
-                },
                 "date": {
                     "name": "Date",
                     "description": "Defaults to today if left blank.",
@@ -69,7 +63,6 @@ def _build_script_config(type_names: list[str]) -> dict:
                     "data": {
                         "amount": "{{ amount }}",
                         "type": "{{ type }}",
-                        "user": "{{ user }}",
                         "date": "{{ date | default(None) }}",
                         "receipt": "{{ receipt | default(None) }}",
                         "note": "{{ note | default(None) }}",

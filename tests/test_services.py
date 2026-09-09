@@ -54,6 +54,42 @@ async def test_add_expense_service_inserts_and_updates_sensor(hass, tmp_path):
     assert float(total.state) == 12.5
 
 
+async def test_add_expense_resolves_user_from_calling_context_when_omitted(
+    hass, tmp_path
+):
+    from homeassistant.core import Context
+
+    await _setup(hass, tmp_path)
+    hass.states.async_set("person.armend", "home", {"user_id": "the-caller"})
+
+    await hass.services.async_call(
+        DOMAIN,
+        "add_expense",
+        {"amount": 5.0, "type": "Groceries"},  # no `user`
+        blocking=True,
+        context=Context(user_id="the-caller"),
+    )
+
+    total = hass.states.get("sensor.expense_tracker_total")
+    assert total.attributes["by_user"] == {"person.armend": 5.0}
+
+
+async def test_add_expense_raises_when_user_omitted_and_unresolvable(hass, tmp_path):
+    from homeassistant.core import Context
+
+    await _setup(hass, tmp_path)
+    # No person entity linked to this (or any) user_id.
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "add_expense",
+            {"amount": 5.0, "type": "Groceries"},
+            blocking=True,
+            context=Context(user_id="someone-unlinked"),
+        )
+
+
 async def test_add_expense_service_rejects_unknown_type(hass, tmp_path):
     await _setup(hass, tmp_path)
 

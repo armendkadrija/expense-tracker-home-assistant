@@ -25,7 +25,12 @@ ADD_EXPENSE_SCHEMA = vol.Schema(
     {
         vol.Required("amount"): vol.All(vol.Coerce(float), vol.Range(min=0)),
         vol.Required("type"): cv.string,
-        vol.Required("user"): cv.entity_id,
+        # Optional: the dashboard script no longer asks for this — it's
+        # resolved from whoever is actually running the script (see
+        # _resolve_user_from_context). Still overridable by direct service
+        # calls (Developer Tools, automations) that want to log on someone
+        # else's behalf.
+        vol.Optional("user"): vol.Any(None, cv.entity_id),
         # The script wrapper's sequence renders blank optional fields as a
         # real Jinja/Python None (e.g. "{{ date | default(None) }}"), not
         # an omitted key. cv.string rejects None outright, so these must
@@ -40,6 +45,22 @@ ADD_TYPE_SCHEMA = vol.Schema(
 )
 REMOVE_TYPE_SCHEMA = vol.Schema({vol.Required("name"): cv.string})
 REMOVE_EXPENSE_SCHEMA = vol.Schema({vol.Required("id"): cv.string})
+
+
+def _resolve_user_from_context(hass: HomeAssistant, user_id: str | None) -> str | None:
+    """Map the HA user who triggered this call to their linked person
+    entity. `person` entities expose the HA account they're linked to as
+    a `user_id` state attribute (homeassistant/components/person -
+    PersonEntity._update_attributes, verified against the installed
+    source) whenever that person was set up with a login. Returns None
+    if there's no calling user (e.g. a context-less internal call) or no
+    person is linked to that account."""
+    if user_id is None:
+        return None
+    for state in hass.states.async_all("person"):
+        if state.attributes.get("user_id") == user_id:
+            return state.entity_id
+    return None
 
 
 def async_register_services(hass: HomeAssistant, runtime: ExpenseTrackerRuntime) -> None:
@@ -64,6 +85,17 @@ def async_register_services(hass: HomeAssistant, runtime: ExpenseTrackerRuntime)
         if type_name not in [name for name, _icon in existing_types]:
             raise ServiceValidationError(f"Unknown expense type: {type_name}")
 
+        user = call.data.get("user")
+        if not user:
+            user = _resolve_user_from_context(hass, call.context.user_id)
+            if user is None:
+                raise ServiceValidationError(
+                    "Could not determine who this expense belongs to: no "
+                    "person is linked to your Home Assistant user account. "
+                    "Pass `user` explicitly (e.g. person.jane) to fix this, "
+                    "or link your account under Settings > People."
+                )
+
         receipt_path = None
         if call.data.get("receipt"):
             receipt_path = await async_save_receipt(
@@ -75,7 +107,7 @@ def async_register_services(hass: HomeAssistant, runtime: ExpenseTrackerRuntime)
                     expense_id=expense_id,
                     amount=call.data["amount"],
                     type_name=type_name,
-                    user=call.data["user"],
+                    user=user,
                     timestamp=timestamp,
                     receipt_path=receipt_path,
                     note=call.data.get("note"),

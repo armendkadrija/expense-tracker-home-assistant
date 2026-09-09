@@ -13,7 +13,11 @@ add_expense:
       selector:
         text:
     user:
-      required: true
+      required: false
+      description: >
+        Who this belongs to. Defaults to whoever is linked to the calling
+        Home Assistant account; only needed to log on someone else's
+        behalf.
       selector:
         entity:
           domain: person
