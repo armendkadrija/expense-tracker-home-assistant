@@ -1,7 +1,7 @@
 {
   "domain": "expense_tracker",
   "name": "Expense Tracker",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "after_dependencies": ["script"],
   "config_flow": true,
   "dependencies": ["file_upload"],
