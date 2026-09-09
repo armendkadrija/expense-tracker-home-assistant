@@ -21,25 +21,47 @@ def _build_script_config(type_names: list[str]) -> dict:
     return {
         SCRIPT_OBJECT_ID: {
             "alias": "Add expense",
+            "icon": "mdi:cash-plus",
             "fields": {
                 "type": {
+                    "name": "Type",
+                    "description": "What kind of expense this is.",
                     "required": True,
                     "selector": {"select": {"options": type_names}},
                 },
                 "amount": {
+                    "name": "Amount",
+                    "description": "How much was spent.",
                     "required": True,
                     "selector": {"number": {"min": 0, "mode": "box"}},
                 },
                 "user": {
+                    "name": "Who",
+                    "description": "Who this expense belongs to.",
                     "required": True,
                     "selector": {"entity": {"domain": "person"}},
                 },
-                "date": {"required": False, "selector": {"date": {}}},
-                "receipt": {
+                "date": {
+                    "name": "Date",
+                    "description": "Defaults to today if left blank.",
                     "required": False,
+                    "advanced": True,
+                    "selector": {"date": {}},
+                },
+                "receipt": {
+                    "name": "Receipt",
+                    "description": "Optional photo of the receipt.",
+                    "required": False,
+                    "advanced": True,
                     "selector": {"file": {"accept": "image/*"}},
                 },
-                "note": {"required": False, "selector": {"text": {}}},
+                "note": {
+                    "name": "Note",
+                    "description": "Optional free-text note.",
+                    "required": False,
+                    "advanced": True,
+                    "selector": {"text": {}},
+                },
             },
             "sequence": [
                 {
