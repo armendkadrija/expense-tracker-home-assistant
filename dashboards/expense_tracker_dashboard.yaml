@@ -1,11 +1,9 @@
 # The Expense Tracker dashboard: 3 tabs (Add / All Expenses / Stats).
 #
-# This is not auto-created by the integration -- there is no public,
-# stable API for a custom integration to create dashboards or register
-# Lovelace resources from its own Python code (only the frontend's
-# internal storage-collection objects, which this project deliberately
-# avoids reaching into). See README.md's "Dashboard setup" section for
-# the one-time manual steps.
+# The integration auto-registers its dashboard resources, but cannot
+# create the dashboard itself (verified against source -- see
+# lovelace_setup.py). Paste this into a new dashboard's raw YAML editor.
+# See README.md's "Dashboard setup" section for the one-time steps.
 title: Expenses
 icon: mdi:cash-multiple
 views:

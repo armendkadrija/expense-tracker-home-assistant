@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import CARD_FILES, DB_FILENAME, DOMAIN, STATIC_URL_PREFIX
 from .db import ExpenseDB
+from .lovelace_setup import async_register_dashboard_resources
 from .runtime import ExpenseTrackerRuntime
 from .services import async_register_services, async_unregister_services
 
@@ -46,6 +47,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = runtime
     await _async_register_static_files(hass)
+    await async_register_dashboard_resources(hass)
 
     async_register_services(hass, runtime)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

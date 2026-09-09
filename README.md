@@ -18,25 +18,33 @@ home-assistant repo for the original design rationale.
 The UI lives in a dedicated 3-tab dashboard (Add / All Expenses / Stats)
 built from two custom cards this integration ships:
 `www/expense-tracker-add-card.js` and `www/expense-tracker-list-card.js`.
-The integration serves both files itself at `/expense_tracker_files/...`
-(verified via `hass.http.async_register_static_paths`, a public HA API) —
-but registering them as Lovelace *resources*, and creating the dashboard
-itself, has no equivalent public API for a custom integration to do from
-its own code. Only the frontend's internal storage objects reach that far,
-which this project deliberately avoids poking. So this part is a one-time
-manual step — the *only* one; there is no `configuration.yaml` editing
-required at all:
 
-1. Settings → Dashboards → Resources → Add Resource, twice:
-   - URL: `/expense_tracker_files/expense-tracker-add-card.js`, type: JavaScript Module
-   - URL: `/expense_tracker_files/expense-tracker-list-card.js`, type: JavaScript Module
-2. Create a new dashboard (Settings → Dashboards → Add Dashboard → "New
-   dashboard from scratch"), then Edit → raw YAML editor, and paste the
-   contents of `dashboards/expense_tracker_dashboard.yaml`.
+**The integration handles almost all of this automatically on setup:**
+- It serves both files itself at `/expense_tracker_files/...`
+  (`hass.http.async_register_static_paths`, a public HA API).
+- It registers both as Lovelace resources automatically
+  (`custom_components/expense_tracker/lovelace_setup.py`) — this reaches
+  into `hass.data[LOVELACE_DATA].resources`, which is real and reachable
+  (built on the public `homeassistant.helpers.collection` base class) but
+  is the `lovelace` component's own internal data structure, not part of
+  HA's versioned `homeassistant.helpers.*` contract — so this step is
+  wrapped defensively and just logs a warning if it ever fails on some
+  future HA version, rather than breaking setup.
+
+**One thing it genuinely cannot do:** create the dashboard itself.
+Verified directly against the source — the object that owns dashboard
+*creation* (`DashboardsCollection`) is a local variable inside lovelace's
+own `async_setup()` function; it's never stored anywhere reachable from
+another integration's code. This isn't a risk trade-off like the resource
+registration above, it's a hard wall. So, one-time manual step:
+
+1. Settings → Dashboards → Add Dashboard → "New dashboard from scratch".
+2. Edit → raw YAML editor, paste the contents of
+   `dashboards/expense_tracker_dashboard.yaml`.
 
 If you're working with Claude and it still has access to this Home
-Assistant instance via the MCP connection, it can do both of these steps
-for you directly instead — that's how they were originally set up.
+Assistant instance via the MCP connection, it can do this step for you
+directly instead — that's how it was originally set up.
 
 ## Managing expense types
 
