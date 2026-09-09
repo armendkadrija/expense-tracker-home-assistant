@@ -1,0 +1,76 @@
+# The Expense Tracker dashboard: 3 tabs (Add / All Expenses / Stats).
+#
+# This is not auto-created by the integration -- there is no public,
+# stable API for a custom integration to create dashboards or register
+# Lovelace resources from its own Python code (only the frontend's
+# internal storage-collection objects, which this project deliberately
+# avoids reaching into -- same reasoning as the script-sync mechanism
+# in custom_components/expense_tracker/script_sync.py). See README.md's
+# "Dashboard setup" section for the one-time manual steps.
+title: Expenses
+icon: mdi:cash-multiple
+views:
+  - type: sections
+    title: Add
+    path: add
+    icon: mdi:plus-circle
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: custom:expense-tracker-add-card
+          - type: custom:expense-tracker-list-card
+            title: Recent expenses
+            limit: 5
+            show_more_path: /expense-tracker/all
+
+  - type: sections
+    title: All Expenses
+    path: all
+    icon: mdi:format-list-bulleted
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: custom:expense-tracker-list-card
+            title: All expenses
+
+  - type: sections
+    title: Stats
+    path: stats
+    icon: mdi:chart-donut
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: tile
+            entity: sensor.expense_tracker_total
+            name: All-time total
+            tap_action: { action: more-info }
+            grid_options: { columns: 6, rows: 1 }
+          - type: tile
+            entity: sensor.expense_tracker_total_this_month
+            name: This month
+            tap_action: { action: more-info }
+            grid_options: { columns: 6, rows: 1 }
+          - type: markdown
+            title: By type
+            content: >-
+              {% set data = state_attr('sensor.expense_tracker_total',
+              'by_type') or {} %}{% set unit =
+              state_attr('sensor.expense_tracker_total',
+              'unit_of_measurement') %}{% if data %}{% for name, amount in
+              data.items() | sort(attribute='1', reverse=true) %}-
+              **{{ name }}**: {{ '%.2f' | format(amount) }} {{ unit }}
+              {% endfor %}{% else %}No expenses yet.{% endif %}
+          - type: markdown
+            title: By person
+            content: >-
+              {% set data = state_attr('sensor.expense_tracker_total',
+              'by_user') or {} %}{% set unit =
+              state_attr('sensor.expense_tracker_total',
+              'unit_of_measurement') %}{% if data %}{% for uid, amount in
+              data.items() | sort(attribute='1', reverse=true) %}-
+              **{{ states[uid].name if uid in states else uid }}**:
+              {{ '%.2f' | format(amount) }} {{ unit }}
+              {% endfor %}{% else %}No expenses yet.{% endif %}

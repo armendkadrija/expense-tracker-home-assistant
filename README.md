@@ -1,9 +1,10 @@
 # Expense Tracker for Home Assistant
 
 Private, personal-use custom integration for tracking household expenses:
-amount, type, who spent it, optional receipt photo. See
+amount, type, who spent it, optional receipt photo — plus a real custom
+dashboard UI (not just the native auto-generated form). See
 `docs/superpowers/specs/2026-09-07-expense-tracker-design.md` in the
-home-assistant repo for the full design rationale.
+home-assistant repo for the original design rationale.
 
 ## Install
 
@@ -14,8 +15,8 @@ home-assistant repo for the full design rationale.
 
 ## One-time setup: wire in the entry-form script
 
-The integration maintains a dedicated script config file so the "Add
-expense" dashboard form always shows your current expense types. Add this
+The integration maintains a dedicated script config file so the fallback
+native entry-form script always shows your current expense types. Add this
 as its own top-level key in `configuration.yaml`, alongside (not nested
 inside) any existing `script:` key you may already have:
 
@@ -27,28 +28,57 @@ HA merges multiple differently-suffixed `script <label>:` top-level keys
 together (the same mechanism `automation ui:` / `automation manual:` use),
 so this line lives next to — never inside — your own `script:` block.
 
-Restart Home Assistant once after adding this line.
+**Add this line, and confirm the integration is fully set up (Settings →
+Devices & Services → Expense Tracker exists), before restarting.** The
+integration creates `expense_tracker_scripts.yaml` itself on first setup —
+if you add the `configuration.yaml` line and restart *before* that file
+exists, Home Assistant fails to parse `configuration.yaml` at boot and
+drops into recovery mode. Getting the integration running first, then
+adding this line, avoids that entirely.
 
-## Dashboard
+## Dashboard setup
 
-Copy the contents of `dashboards/expense_tracker_view.yaml` into a new
-Lovelace view (Edit Dashboard → Add View → raw YAML editor).
+The real UI lives in a dedicated 3-tab dashboard (Add / All Expenses /
+Stats) built from two custom cards this integration ships:
+`www/expense-tracker-add-card.js` and `www/expense-tracker-list-card.js`.
+The integration serves both files itself at `/expense_tracker_files/...`
+(verified via `hass.http.async_register_static_paths`, a public HA API) —
+but registering them as Lovelace *resources*, and creating the dashboard
+itself, has no equivalent public API for a custom integration to do from
+its own code. Only the frontend's internal storage objects reach that far,
+which this project deliberately avoids poking (same reasoning as the
+script-sync mechanism in `script_sync.py`). So this part is a one-time
+manual step:
+
+1. Settings → Dashboards → Resources → Add Resource, twice:
+   - URL: `/expense_tracker_files/expense-tracker-add-card.js`, type: JavaScript Module
+   - URL: `/expense_tracker_files/expense-tracker-list-card.js`, type: JavaScript Module
+2. Create a new dashboard (Settings → Dashboards → Add Dashboard → "New
+   dashboard from scratch"), then Edit → raw YAML editor, and paste the
+   contents of `dashboards/expense_tracker_dashboard.yaml`.
+
+If you're working with Claude and it still has access to this Home
+Assistant instance via the MCP connection, it can do both of these steps
+for you directly instead — that's how they were originally set up.
 
 ## Managing expense types
 
 Types ship seeded with Groceries, Transport, Utilities, Health,
-Entertainment, Other. Add or remove your own from Developer Tools →
-Actions:
+Entertainment, Other. Add or remove your own from the Stats tab isn't
+built in yet — use Developer Tools → Actions:
 
 - `expense_tracker.add_type` — `name`, `icon` (mdi icon string)
 - `expense_tracker.remove_type` — `name` (existing expenses keep their
   historical type name even after it's removed)
 
+The dashboard's type picker (and the "By type" stats breakdown) update
+automatically — no separate sync step.
+
 ## Fixing a mistake
 
-`expense_tracker.remove_expense` with the expense's `id` deletes the row
-and its receipt file. Find the `id` via the SQLite file directly:
-`<config>/expense_tracker/expenses.db`.
+Delete an expense straight from the "Add" or "All Expenses" tab (trash
+icon on each row) — this calls `expense_tracker.remove_expense`, which
+also deletes its receipt file if it had one.
 
 ## A note on receipt privacy
 
