@@ -67,3 +67,24 @@ remove_expense:
       required: true
       selector:
         text:
+
+list_expenses:
+  name: List expenses
+  description: >
+    Read-only: returns individual expense records (id, amount, type,
+    icon, date, note, receipt path), most recent first.
+  fields:
+    limit:
+      required: false
+      description: Max number of expenses to return. Omit for all.
+      selector:
+        number:
+          min: 1
+          mode: box
+    offset:
+      required: false
+      description: Number of expenses to skip (for pagination).
+      selector:
+        number:
+          min: 0
+          mode: box

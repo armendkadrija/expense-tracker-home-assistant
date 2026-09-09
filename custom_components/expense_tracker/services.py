@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import voluptuous as vol
 
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
@@ -20,6 +20,7 @@ SERVICE_ADD_EXPENSE = "add_expense"
 SERVICE_ADD_TYPE = "add_type"
 SERVICE_REMOVE_TYPE = "remove_type"
 SERVICE_REMOVE_EXPENSE = "remove_expense"
+SERVICE_LIST_EXPENSES = "list_expenses"
 
 ADD_EXPENSE_SCHEMA = vol.Schema(
     {
@@ -45,6 +46,12 @@ ADD_TYPE_SCHEMA = vol.Schema(
 )
 REMOVE_TYPE_SCHEMA = vol.Schema({vol.Required("name"): cv.string})
 REMOVE_EXPENSE_SCHEMA = vol.Schema({vol.Required("id"): cv.string})
+LIST_EXPENSES_SCHEMA = vol.Schema(
+    {
+        vol.Optional("limit"): vol.All(vol.Coerce(int), vol.Range(min=1)),
+        vol.Optional("offset", default=0): vol.All(vol.Coerce(int), vol.Range(min=0)),
+    }
+)
 
 
 def _resolve_user_from_context(hass: HomeAssistant, user_id: str | None) -> str | None:
@@ -148,6 +155,15 @@ def async_register_services(hass: HomeAssistant, runtime: ExpenseTrackerRuntime)
         if receipt_path:
             await async_delete_receipt(hass, receipt_path)
 
+    async def handle_list_expenses(call: ServiceCall) -> dict:
+        expenses = await runtime.async_list_expenses(
+            limit=call.data.get("limit"), offset=call.data["offset"]
+        )
+        icons = {name: icon for name, icon in await runtime.async_list_types()}
+        for expense in expenses:
+            expense["icon"] = icons.get(expense["type"], "mdi:help-circle-outline")
+        return {"expenses": expenses}
+
     hass.services.async_register(
         DOMAIN, SERVICE_ADD_EXPENSE, handle_add_expense, schema=ADD_EXPENSE_SCHEMA
     )
@@ -163,6 +179,13 @@ def async_register_services(hass: HomeAssistant, runtime: ExpenseTrackerRuntime)
         handle_remove_expense,
         schema=REMOVE_EXPENSE_SCHEMA,
     )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_LIST_EXPENSES,
+        handle_list_expenses,
+        schema=LIST_EXPENSES_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
 
 
 def async_unregister_services(hass: HomeAssistant) -> None:
@@ -171,5 +194,6 @@ def async_unregister_services(hass: HomeAssistant) -> None:
         SERVICE_ADD_TYPE,
         SERVICE_REMOVE_TYPE,
         SERVICE_REMOVE_EXPENSE,
+        SERVICE_LIST_EXPENSES,
     ):
         hass.services.async_remove(DOMAIN, service)

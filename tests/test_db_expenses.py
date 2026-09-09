@@ -76,3 +76,34 @@ def test_remove_expense_rejects_unknown_id(tmp_path):
 
     with pytest.raises(UnknownExpenseError):
         db.remove_expense("nonexistent")
+
+
+def test_list_expenses_returns_most_recent_first(tmp_path):
+    db = _seeded_db(tmp_path)
+    db.add_expense(
+        "id-old", 5.0, "Groceries", "person.armend", "2026-09-01T00:00:00+00:00"
+    )
+    db.add_expense(
+        "id-new", 7.0, "Transport", "person.armend", "2026-09-05T00:00:00+00:00"
+    )
+
+    expenses = db.list_expenses()
+
+    assert [e["id"] for e in expenses] == ["id-new", "id-old"]
+    assert expenses[0]["amount"] == 7.0
+    assert expenses[0]["type"] == "Transport"
+
+
+def test_list_expenses_respects_limit_and_offset(tmp_path):
+    db = _seeded_db(tmp_path)
+    for i in range(5):
+        db.add_expense(
+            f"id-{i}", float(i), "Groceries", "person.armend",
+            f"2026-09-0{i + 1}T00:00:00+00:00",
+        )
+
+    page = db.list_expenses(limit=2, offset=1)
+
+    # Most recent first: id-4, id-3, id-2, id-1, id-0 -- offset 1, limit 2
+    # skips id-4 and returns id-3, id-2.
+    assert [e["id"] for e in page] == ["id-3", "id-2"]

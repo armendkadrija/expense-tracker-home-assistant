@@ -244,6 +244,43 @@ async def test_add_type_updates_sensor_types_attribute_immediately(hass, tmp_pat
     assert "Subscriptions" not in total.attributes["types"]
 
 
+async def test_list_expenses_service_returns_expenses_with_icons(hass, tmp_path):
+    await _setup(hass, tmp_path)
+    await hass.services.async_call(
+        DOMAIN,
+        "add_expense",
+        {"amount": 12.5, "type": "Groceries", "user": "person.armend"},
+        blocking=True,
+    )
+
+    result = await hass.services.async_call(
+        DOMAIN, "list_expenses", {}, blocking=True, return_response=True
+    )
+
+    assert len(result["expenses"]) == 1
+    expense = result["expenses"][0]
+    assert expense["amount"] == 12.5
+    assert expense["type"] == "Groceries"
+    assert expense["icon"] == "mdi:cart"  # Groceries' seeded default icon
+
+
+async def test_list_expenses_service_respects_limit(hass, tmp_path):
+    await _setup(hass, tmp_path)
+    for _ in range(3):
+        await hass.services.async_call(
+            DOMAIN,
+            "add_expense",
+            {"amount": 1.0, "type": "Groceries", "user": "person.armend"},
+            blocking=True,
+        )
+
+    result = await hass.services.async_call(
+        DOMAIN, "list_expenses", {"limit": 2}, blocking=True, return_response=True
+    )
+
+    assert len(result["expenses"]) == 2
+
+
 async def test_add_type_then_remove_type_service(hass, tmp_path):
     await _setup(hass, tmp_path)
 

@@ -65,6 +65,13 @@ class ExpenseTrackerRuntime:
     async def async_get_totals(self, since: str | None = None) -> dict:
         return await self.hass.async_add_executor_job(self.db.get_totals, since)
 
+    async def async_list_expenses(
+        self, limit: int | None = None, offset: int = 0
+    ) -> list[dict]:
+        return await self.hass.async_add_executor_job(
+            self.db.list_expenses, limit, offset
+        )
+
     async def _async_refresh_sensors(self) -> None:
         for sensor in self.sensors:
             await sensor.async_refresh()

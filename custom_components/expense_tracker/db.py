@@ -145,6 +145,33 @@ class ExpenseDB:
         finally:
             conn.close()
 
+    def list_expenses(self, limit: int | None = None, offset: int = 0) -> list[dict]:
+        conn = sqlite3.connect(self._db_path)
+        try:
+            query = (
+                "SELECT id, amount, type_name, user, receipt_path, note, "
+                "timestamp FROM expenses ORDER BY timestamp DESC"
+            )
+            params: tuple = ()
+            if limit is not None:
+                query += " LIMIT ? OFFSET ?"
+                params = (limit, offset)
+            rows = conn.execute(query, params).fetchall()
+            return [
+                {
+                    "id": row[0],
+                    "amount": row[1],
+                    "type": row[2],
+                    "user": row[3],
+                    "receipt_path": row[4],
+                    "note": row[5],
+                    "timestamp": row[6],
+                }
+                for row in rows
+            ]
+        finally:
+            conn.close()
+
     def get_totals(self, since: str | None = None) -> dict:
         conn = sqlite3.connect(self._db_path)
         try:
