@@ -1,6 +1,6 @@
 """Receipt file storage for the Expense Tracker integration.
 
-Receipts arrive via HA's native `file` selector (see script_sync.py and
+Receipts arrive via the custom dashboard card's file upload (see
 services.yaml), which hands the handler a `file_id` string referencing a
 file the `file_upload` integration is holding in a temp directory — not a
 base64 payload. `homeassistant.components.file_upload.process_uploaded_file`

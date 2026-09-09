@@ -13,42 +13,19 @@ home-assistant repo for the original design rationale.
 3. Settings → Devices & Services → Add Integration → "Expense Tracker"
    (no configuration needed).
 
-## One-time setup: wire in the entry-form script
-
-The integration maintains a dedicated script config file so the fallback
-native entry-form script always shows your current expense types. Add this
-as its own top-level key in `configuration.yaml`, alongside (not nested
-inside) any existing `script:` key you may already have:
-
-```yaml
-script expense_tracker: !include expense_tracker_scripts.yaml
-```
-
-HA merges multiple differently-suffixed `script <label>:` top-level keys
-together (the same mechanism `automation ui:` / `automation manual:` use),
-so this line lives next to — never inside — your own `script:` block.
-
-**Add this line, and confirm the integration is fully set up (Settings →
-Devices & Services → Expense Tracker exists), before restarting.** The
-integration creates `expense_tracker_scripts.yaml` itself on first setup —
-if you add the `configuration.yaml` line and restart *before* that file
-exists, Home Assistant fails to parse `configuration.yaml` at boot and
-drops into recovery mode. Getting the integration running first, then
-adding this line, avoids that entirely.
-
 ## Dashboard setup
 
-The real UI lives in a dedicated 3-tab dashboard (Add / All Expenses /
-Stats) built from two custom cards this integration ships:
+The UI lives in a dedicated 3-tab dashboard (Add / All Expenses / Stats)
+built from two custom cards this integration ships:
 `www/expense-tracker-add-card.js` and `www/expense-tracker-list-card.js`.
 The integration serves both files itself at `/expense_tracker_files/...`
 (verified via `hass.http.async_register_static_paths`, a public HA API) —
 but registering them as Lovelace *resources*, and creating the dashboard
 itself, has no equivalent public API for a custom integration to do from
 its own code. Only the frontend's internal storage objects reach that far,
-which this project deliberately avoids poking (same reasoning as the
-script-sync mechanism in `script_sync.py`). So this part is a one-time
-manual step:
+which this project deliberately avoids poking. So this part is a one-time
+manual step — the *only* one; there is no `configuration.yaml` editing
+required at all:
 
 1. Settings → Dashboards → Resources → Add Resource, twice:
    - URL: `/expense_tracker_files/expense-tracker-add-card.js`, type: JavaScript Module

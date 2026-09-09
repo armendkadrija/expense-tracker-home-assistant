@@ -4,9 +4,8 @@
 # stable API for a custom integration to create dashboards or register
 # Lovelace resources from its own Python code (only the frontend's
 # internal storage-collection objects, which this project deliberately
-# avoids reaching into -- same reasoning as the script-sync mechanism
-# in custom_components/expense_tracker/script_sync.py). See README.md's
-# "Dashboard setup" section for the one-time manual steps.
+# avoids reaching into). See README.md's "Dashboard setup" section for
+# the one-time manual steps.
 title: Expenses
 icon: mdi:cash-multiple
 views:

@@ -1,15 +1,10 @@
 # tests/test_sensor.py
-import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.util import dt as dt_util
 
 from custom_components.expense_tracker.const import DOMAIN
-
-# async_setup_entry now syncs the add-expense helper script at startup
-# (Task 10), which calls the real script.reload service.
-pytestmark = pytest.mark.usefixtures("stub_script_reload")
 
 
 async def test_sensors_start_at_zero_with_seeded_types(hass, tmp_path):

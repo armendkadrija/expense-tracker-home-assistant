@@ -3,8 +3,6 @@
 DOMAIN = "expense_tracker"
 DB_FILENAME = "expenses.db"
 RECEIPTS_DIR = "www/expense_tracker/receipts"
-SCRIPT_OBJECT_ID = "expense_tracker_add_expense"
-SCRIPT_CONFIG_FILENAME = "expense_tracker_scripts.yaml"
 SCHEMA_VERSION = 1
 
 # Dashboard card JS, shipped by the integration and served via
@@ -14,7 +12,7 @@ SCHEMA_VERSION = 1
 # API for a custom integration to create Lovelace resources/dashboards
 # from its own code, only the internal storage-collection objects the
 # frontend/WebSocket API reach, which this project deliberately avoids
-# poking (same reasoning as the script-sync mechanism).
+# poking.
 STATIC_URL_PREFIX = "/expense_tracker_files"
 CARD_FILES = ["expense-tracker-add-card.js", "expense-tracker-list-card.js"]
 

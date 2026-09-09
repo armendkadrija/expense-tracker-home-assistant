@@ -1,8 +1,7 @@
 {
   "domain": "expense_tracker",
   "name": "Expense Tracker",
-  "version": "0.1.5",
-  "after_dependencies": ["script"],
+  "version": "0.1.6",
   "config_flow": true,
   "dependencies": ["file_upload"],
   "documentation": "https://github.com/armendkadrija/expense-tracker-home-assistant",
