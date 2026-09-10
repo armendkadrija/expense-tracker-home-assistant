@@ -51,8 +51,8 @@ add_type:
 remove_type:
   name: Remove expense type
   description: >
-    Remove an expense type. Existing expenses keep their historical type
-    name.
+    Remove an expense type. Refused if any expense still uses it -- remove
+    or re-type those expenses first.
   fields:
     name:
       required: true
@@ -88,3 +88,10 @@ list_expenses:
         number:
           min: 0
           mode: box
+
+list_types:
+  name: List expense types
+  description: >
+    Read-only: returns every expense type (name, icon, and how many
+    expenses currently use it) -- a type with a nonzero count cannot be
+    removed.

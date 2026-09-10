@@ -1,4 +1,4 @@
-# The Expense Tracker dashboard: 3 tabs (Add / All Expenses / Stats).
+# The Expense Tracker dashboard: 4 tabs (Add / All Expenses / Stats / Types).
 #
 # The integration auto-registers its dashboard resources, but cannot
 # create the dashboard itself (verified against source -- see
@@ -71,3 +71,13 @@ views:
               **{{ states[uid].name if uid in states else uid }}**:
               {{ '%.2f' | format(amount) }} {{ unit }}
               {% endfor %}{% else %}No expenses yet.{% endif %}
+
+  - type: sections
+    title: Types
+    path: types
+    icon: mdi:shape
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: custom:expense-tracker-types-card

@@ -268,17 +268,11 @@ async def test_add_type_then_remove_type_service(hass, tmp_path):
     )
 
     await hass.services.async_call(
-        DOMAIN, "add_expense",
-        {"amount": 9.99, "type": "Subscriptions", "user": "person.armend"},
-        blocking=True,
-    )
-
-    await hass.services.async_call(
         DOMAIN, "remove_type", {"name": "Subscriptions"}, blocking=True
     )
 
     total = hass.states.get("sensor.expense_tracker_total")
-    assert total.attributes["by_type"]["Subscriptions"] == 9.99  # history survives
+    assert "Subscriptions" not in total.attributes["types"]
 
 
 async def test_remove_type_rejects_unknown_name(hass, tmp_path):
@@ -288,6 +282,65 @@ async def test_remove_type_rejects_unknown_name(hass, tmp_path):
         await hass.services.async_call(
             DOMAIN, "remove_type", {"name": "Nonexistent"}, blocking=True
         )
+
+
+async def test_remove_type_service_rejects_when_in_use(hass, tmp_path):
+    await _setup(hass, tmp_path)
+    await hass.services.async_call(
+        DOMAIN, "add_expense",
+        {"amount": 9.99, "type": "Groceries", "user": "person.armend"},
+        blocking=True,
+    )
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN, "remove_type", {"name": "Groceries"}, blocking=True
+        )
+
+    # Rejected removal must leave the type fully intact and usable.
+    total = hass.states.get("sensor.expense_tracker_total")
+    assert "Groceries" in total.attributes["types"]
+
+
+async def test_remove_type_service_succeeds_once_expense_is_gone(hass, tmp_path):
+    await _setup(hass, tmp_path)
+    await hass.services.async_call(
+        DOMAIN, "add_expense",
+        {"amount": 9.99, "type": "Groceries", "user": "person.armend"},
+        blocking=True,
+    )
+    result = await hass.services.async_call(
+        DOMAIN, "list_expenses", {}, blocking=True, return_response=True
+    )
+    expense_id = result["expenses"][0]["id"]
+    await hass.services.async_call(
+        DOMAIN, "remove_expense", {"id": expense_id}, blocking=True
+    )
+
+    await hass.services.async_call(  # must not raise now
+        DOMAIN, "remove_type", {"name": "Groceries"}, blocking=True
+    )
+
+    total = hass.states.get("sensor.expense_tracker_total")
+    assert "Groceries" not in total.attributes["types"]
+
+
+async def test_list_types_service_returns_usage_counts(hass, tmp_path):
+    await _setup(hass, tmp_path)
+    await hass.services.async_call(
+        DOMAIN, "add_expense",
+        {"amount": 9.99, "type": "Groceries", "user": "person.armend"},
+        blocking=True,
+    )
+
+    result = await hass.services.async_call(
+        DOMAIN, "list_types", {}, blocking=True, return_response=True
+    )
+
+    by_name = {t["name"]: t for t in result["types"]}
+    assert by_name["Groceries"]["count"] == 1
+    assert by_name["Groceries"]["icon"] == "mdi:cart"
+    assert by_name["Transport"]["count"] == 0
 
 
 async def test_remove_expense_service_deletes_and_updates_sensor(hass, tmp_path):

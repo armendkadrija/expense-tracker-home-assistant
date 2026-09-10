@@ -31,6 +31,14 @@ class UnknownExpenseError(ValueError):
     """Raised when referencing an expense id that does not exist."""
 
 
+class TypeInUseError(ValueError):
+    """Raised when trying to remove a type that at least one expense
+    still references. Removal is unsafe to allow here because type_name
+    is deliberately not a real foreign key (see remove_type's docstring
+    and the spec's "not a real FK" note) -- there is no cascade to fall
+    back on, so blocking the removal outright is the only safe choice."""
+
+
 class ExpenseDB:
     def __init__(self, db_path: str) -> None:
         self._db_path = db_path
@@ -76,6 +84,26 @@ class ExpenseDB:
         finally:
             conn.close()
 
+    def list_types_with_usage(self) -> list[dict]:
+        """Like list_types, plus how many expenses currently reference
+        each type -- the types-management page needs this to know which
+        types are safe to delete without the user having to try and fail
+        first."""
+        conn = sqlite3.connect(self._db_path)
+        try:
+            rows = conn.execute(
+                "SELECT et.name, et.icon, COUNT(e.id) "
+                "FROM expense_types et "
+                "LEFT JOIN expenses e ON e.type_name = et.name "
+                "GROUP BY et.name, et.icon "
+                "ORDER BY et.name"
+            ).fetchall()
+            return [
+                {"name": row[0], "icon": row[1], "count": row[2]} for row in rows
+            ]
+        finally:
+            conn.close()
+
     def add_type(self, name: str, icon: str) -> None:
         conn = sqlite3.connect(self._db_path)
         try:
@@ -95,11 +123,20 @@ class ExpenseDB:
     def remove_type(self, name: str) -> None:
         conn = sqlite3.connect(self._db_path)
         try:
-            cursor = conn.execute(
-                "DELETE FROM expense_types WHERE name = ?", (name,)
-            )
-            if cursor.rowcount == 0:
+            existing = conn.execute(
+                "SELECT 1 FROM expense_types WHERE name = ?", (name,)
+            ).fetchone()
+            if not existing:
                 raise UnknownTypeError(f"Type '{name}' does not exist")
+            in_use_count = conn.execute(
+                "SELECT COUNT(*) FROM expenses WHERE type_name = ?", (name,)
+            ).fetchone()[0]
+            if in_use_count > 0:
+                raise TypeInUseError(
+                    f"Cannot remove '{name}': {in_use_count} expense(s) "
+                    "still use this type"
+                )
+            conn.execute("DELETE FROM expense_types WHERE name = ?", (name,))
             conn.commit()
         finally:
             conn.close()

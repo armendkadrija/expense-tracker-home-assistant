@@ -15,9 +15,10 @@ home-assistant repo for the original design rationale.
 
 ## Dashboard setup
 
-The UI lives in a dedicated 3-tab dashboard (Add / All Expenses / Stats)
-built from two custom cards this integration ships:
-`www/expense-tracker-add-card.js` and `www/expense-tracker-list-card.js`.
+The UI lives in a dedicated 4-tab dashboard (Add / All Expenses / Stats /
+Types) built from three custom cards this integration ships:
+`www/expense-tracker-add-card.js`, `www/expense-tracker-list-card.js`, and
+`www/expense-tracker-types-card.js`.
 
 **The integration handles almost all of this automatically on setup:**
 - It serves both files itself at `/expense_tracker_files/...`
@@ -48,16 +49,21 @@ directly instead — that's how it was originally set up.
 
 ## Managing expense types
 
-Types ship seeded with Groceries, Transport, Utilities, Health,
-Entertainment, Other. Add or remove your own from the Stats tab isn't
-built in yet — use Developer Tools → Actions:
+The "Types" tab lists every type with an icon and a usage count, a form
+to add new ones, and a delete button per row. Types ship seeded with
+Groceries, Transport, Utilities, Health, Entertainment, Other.
 
-- `expense_tracker.add_type` — `name`, `icon` (mdi icon string)
-- `expense_tracker.remove_type` — `name` (existing expenses keep their
-  historical type name even after it's removed)
+**A type in use can't be deleted — enforced server-side, not just hidden
+in the UI.** `expense_tracker.remove_type` checks for any expense still
+referencing that type name and refuses with a clear error if one exists
+(`db.py`'s `TypeInUseError`); the card disables the delete button for
+in-use types for the same reason, but the backend check is what actually
+matters — calling the service directly (Developer Tools, an automation)
+gets the same refusal. Remove or re-type the referencing expenses first
+if you need to retire a type.
 
 The dashboard's type picker (and the "By type" stats breakdown) update
-automatically — no separate sync step.
+automatically wherever types are used — no separate sync step.
 
 ## Fixing a mistake
 

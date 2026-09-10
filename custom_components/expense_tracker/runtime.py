@@ -19,6 +19,9 @@ class ExpenseTrackerRuntime:
     async def async_list_types(self) -> list[tuple[str, str]]:
         return await self.hass.async_add_executor_job(self.db.list_types)
 
+    async def async_list_types_with_usage(self) -> list[dict]:
+        return await self.hass.async_add_executor_job(self.db.list_types_with_usage)
+
     async def async_add_type(self, name: str, icon: str) -> None:
         await self.hass.async_add_executor_job(self.db.add_type, name, icon)
         # The sensors' `types` attribute is the live source the dashboard

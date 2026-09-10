@@ -11,7 +11,12 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN
-from .db import DuplicateTypeError, UnknownExpenseError, UnknownTypeError
+from .db import (
+    DuplicateTypeError,
+    TypeInUseError,
+    UnknownExpenseError,
+    UnknownTypeError,
+)
 from .dt_helpers import local_date_string_to_utc_iso
 from .receipts import async_delete_receipt, async_save_receipt
 from .runtime import ExpenseTrackerRuntime
@@ -21,6 +26,7 @@ SERVICE_ADD_TYPE = "add_type"
 SERVICE_REMOVE_TYPE = "remove_type"
 SERVICE_REMOVE_EXPENSE = "remove_expense"
 SERVICE_LIST_EXPENSES = "list_expenses"
+SERVICE_LIST_TYPES = "list_types"
 
 ADD_EXPENSE_SCHEMA = vol.Schema(
     {
@@ -144,8 +150,11 @@ def async_register_services(hass: HomeAssistant, runtime: ExpenseTrackerRuntime)
     async def handle_remove_type(call: ServiceCall) -> None:
         try:
             await runtime.async_remove_type(call.data["name"])
-        except UnknownTypeError as err:
+        except (UnknownTypeError, TypeInUseError) as err:
             raise ServiceValidationError(str(err)) from err
+
+    async def handle_list_types(call: ServiceCall) -> dict:
+        return {"types": await runtime.async_list_types_with_usage()}
 
     async def handle_remove_expense(call: ServiceCall) -> None:
         try:
@@ -186,6 +195,13 @@ def async_register_services(hass: HomeAssistant, runtime: ExpenseTrackerRuntime)
         schema=LIST_EXPENSES_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_LIST_TYPES,
+        handle_list_types,
+        schema=vol.Schema({}),
+        supports_response=SupportsResponse.ONLY,
+    )
 
 
 def async_unregister_services(hass: HomeAssistant) -> None:
@@ -195,5 +211,6 @@ def async_unregister_services(hass: HomeAssistant) -> None:
         SERVICE_REMOVE_TYPE,
         SERVICE_REMOVE_EXPENSE,
         SERVICE_LIST_EXPENSES,
+        SERVICE_LIST_TYPES,
     ):
         hass.services.async_remove(DOMAIN, service)

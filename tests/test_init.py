@@ -39,6 +39,9 @@ async def test_setup_entry_serves_card_js_files(hass, hass_client, tmp_path):
     resp = await client.get("/expense_tracker_files/expense-tracker-list-card.js")
     assert resp.status == 200
 
+    resp = await client.get("/expense_tracker_files/expense-tracker-types-card.js")
+    assert resp.status == 200
+
     # Reload the entry to prove the static-path registration guard
     # doesn't raise on a second async_setup_entry call.
     assert await hass.config_entries.async_unload(entry.entry_id)
