@@ -1,9 +1,11 @@
 import pytest
 
+from custom_components.expense_tracker.const import DEFAULT_TYPES
 from custom_components.expense_tracker.db import (
     DuplicateTypeError,
     ExpenseDB,
     TypeInUseError,
+    TypeSetMismatchError,
     UnknownTypeError,
 )
 
@@ -79,3 +81,59 @@ def test_list_types_with_usage_returns_counts(tmp_path):
     assert by_name["Groceries"]["count"] == 2
     assert by_name["Groceries"]["icon"] == "mdi:cart"
     assert by_name["Transport"]["count"] == 0
+
+
+def test_add_type_appends_to_end_of_order(tmp_path):
+    db = ExpenseDB(str(tmp_path / "expenses.db"))
+    db.initialize()
+
+    db.add_type("Subscriptions", "mdi:credit-card")
+
+    names = [name for name, _icon in db.list_types()]
+    assert names[-1] == "Subscriptions"
+    assert names[:-1] == [name for name, _icon in DEFAULT_TYPES]
+
+
+def test_reorder_types_persists_new_order(tmp_path):
+    db = ExpenseDB(str(tmp_path / "expenses.db"))
+    db.initialize()
+    original_names = [name for name, _icon in db.list_types()]
+    reversed_names = list(reversed(original_names))
+
+    db.reorder_types(reversed_names)
+
+    assert [name for name, _icon in db.list_types()] == reversed_names
+    # Usage-count listing must follow the same order, not drift back to
+    # alphabetical -- the add-expense card's type picker and the types
+    # page both read their order from these two methods.
+    assert [t["name"] for t in db.list_types_with_usage()] == reversed_names
+
+
+def test_reorder_types_rejects_missing_type(tmp_path):
+    db = ExpenseDB(str(tmp_path / "expenses.db"))
+    db.initialize()
+    names = [name for name, _icon in db.list_types()]
+
+    with pytest.raises(TypeSetMismatchError):
+        db.reorder_types(names[:-1])  # dropped one -- must be rejected
+
+    # Rejected reorder must not have partially applied.
+    assert [name for name, _icon in db.list_types()] == names
+
+
+def test_reorder_types_rejects_unknown_type(tmp_path):
+    db = ExpenseDB(str(tmp_path / "expenses.db"))
+    db.initialize()
+    names = [name for name, _icon in db.list_types()]
+
+    with pytest.raises(TypeSetMismatchError):
+        db.reorder_types(names + ["Nonexistent"])
+
+
+def test_reorder_types_rejects_duplicate_entry(tmp_path):
+    db = ExpenseDB(str(tmp_path / "expenses.db"))
+    db.initialize()
+    names = [name for name, _icon in db.list_types()]
+
+    with pytest.raises(TypeSetMismatchError):
+        db.reorder_types([names[0], names[0]] + names[2:])

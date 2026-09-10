@@ -70,7 +70,16 @@ class ExpenseTrackerTotalSensor(SensorEntity):
             "by_type": totals["by_type"],
             "by_user": totals["by_user"],
             "count": totals["count"],
-            "types": dict(types),
+            # A list of [name, icon] pairs, NOT a dict. HA's state machine
+            # skips writing a new state when old attributes == new
+            # attributes (homeassistant/core.py's async_set_internal), and
+            # plain dict equality ignores key order -- reordering types
+            # with the same set of names would silently never reach the
+            # add-expense card's type picker if this were a dict, since
+            # nothing else in these attributes necessarily changes at the
+            # same time. A list is order-sensitive under `==`, so a
+            # reorder always produces a real state change.
+            "types": types,
         }
         if self._this_month:
             # HA's long-term statistics need last_reset on a state_class

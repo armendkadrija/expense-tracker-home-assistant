@@ -34,6 +34,15 @@ class ExpenseTrackerRuntime:
         await self.hass.async_add_executor_job(self.db.remove_type, name)
         await self._async_refresh_sensors()
 
+    async def async_reorder_types(self, ordered_names: list[str]) -> None:
+        await self.hass.async_add_executor_job(
+            self.db.reorder_types, ordered_names
+        )
+        # The add-expense card's type picker reads its order straight off
+        # the sensor's `types` attribute too -- must refresh immediately
+        # for the new order to show up there as well, not just here.
+        await self._async_refresh_sensors()
+
     async def async_add_expense(
         self,
         expense_id: str,

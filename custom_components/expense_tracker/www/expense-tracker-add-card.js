@@ -7,6 +7,12 @@
  * `types` attribute (already kept fresh by the integration) and calls
  * expense_tracker.add_expense directly via hass.callService.
  *
+ * `types` is a list of [name, icon] pairs, in display order -- NOT a
+ * dict. It has to be, because HA's state machine skips writing a state
+ * update when old attributes == new attributes, and plain dict equality
+ * ignores key order (see sensor.py). A reorder-only change (same names,
+ * same counts) would otherwise never reach this card.
+ *
  * Receipt upload: POSTs multipart form data straight to /api/file_upload
  * (the backend contract for this is fully verified against the Python
  * source and an actual working end-to-end test from earlier in this
@@ -38,14 +44,14 @@ class ExpenseTrackerAddCard extends HTMLElement {
 
   _refreshTypes() {
     const state = this._hass.states["sensor.expense_tracker_total"];
-    const types = (state && state.attributes && state.attributes.types) || {};
+    const types = (state && state.attributes && state.attributes.types) || [];
     const key = JSON.stringify(types);
     if (key === this._typesKey) return;
     this._typesKey = key;
-    this._types = types;
+    this._types = types; // list of [name, icon] pairs, in display order
     this._renderTypeMenu();
-    if (!this._selectedType || !(this._selectedType in types)) {
-      const first = Object.keys(types)[0];
+    if (!this._selectedType || !types.some(([name]) => name === this._selectedType)) {
+      const first = types.length ? types[0][0] : null;
       if (first) this._selectType(first);
     }
   }
@@ -335,7 +341,7 @@ class ExpenseTrackerAddCard extends HTMLElement {
   _renderTypeMenu() {
     const menu = this._el.typeMenu;
     menu.innerHTML = "";
-    for (const [name, icon] of Object.entries(this._types)) {
+    for (const [name, icon] of this._types) {
       const row = document.createElement("div");
       row.className = "type-row";
       row.dataset.name = name;
@@ -351,7 +357,11 @@ class ExpenseTrackerAddCard extends HTMLElement {
   _selectType(name) {
     this._selectedType = name;
     this._el.typeLabel.textContent = name;
-    this._el.typeIcon.setAttribute("icon", this._types[name] || "mdi:help-circle-outline");
+    const match = this._types.find(([n]) => n === name);
+    this._el.typeIcon.setAttribute(
+      "icon",
+      (match && match[1]) || "mdi:help-circle-outline"
+    );
     for (const row of this._el.typeMenu.children) {
       row.classList.toggle("selected", row.dataset.name === name);
     }

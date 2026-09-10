@@ -14,6 +14,7 @@ from .const import DOMAIN
 from .db import (
     DuplicateTypeError,
     TypeInUseError,
+    TypeSetMismatchError,
     UnknownExpenseError,
     UnknownTypeError,
 )
@@ -27,6 +28,7 @@ SERVICE_REMOVE_TYPE = "remove_type"
 SERVICE_REMOVE_EXPENSE = "remove_expense"
 SERVICE_LIST_EXPENSES = "list_expenses"
 SERVICE_LIST_TYPES = "list_types"
+SERVICE_REORDER_TYPES = "reorder_types"
 
 ADD_EXPENSE_SCHEMA = vol.Schema(
     {
@@ -51,6 +53,9 @@ ADD_TYPE_SCHEMA = vol.Schema(
     {vol.Required("name"): cv.string, vol.Required("icon"): cv.icon}
 )
 REMOVE_TYPE_SCHEMA = vol.Schema({vol.Required("name"): cv.string})
+REORDER_TYPES_SCHEMA = vol.Schema(
+    {vol.Required("names"): vol.All([cv.string], vol.Length(min=1))}
+)
 REMOVE_EXPENSE_SCHEMA = vol.Schema({vol.Required("id"): cv.string})
 LIST_EXPENSES_SCHEMA = vol.Schema(
     {
@@ -156,6 +161,12 @@ def async_register_services(hass: HomeAssistant, runtime: ExpenseTrackerRuntime)
     async def handle_list_types(call: ServiceCall) -> dict:
         return {"types": await runtime.async_list_types_with_usage()}
 
+    async def handle_reorder_types(call: ServiceCall) -> None:
+        try:
+            await runtime.async_reorder_types(call.data["names"])
+        except TypeSetMismatchError as err:
+            raise ServiceValidationError(str(err)) from err
+
     async def handle_remove_expense(call: ServiceCall) -> None:
         try:
             receipt_path = await runtime.async_remove_expense(call.data["id"])
@@ -202,6 +213,12 @@ def async_register_services(hass: HomeAssistant, runtime: ExpenseTrackerRuntime)
         schema=vol.Schema({}),
         supports_response=SupportsResponse.ONLY,
     )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_REORDER_TYPES,
+        handle_reorder_types,
+        schema=REORDER_TYPES_SCHEMA,
+    )
 
 
 def async_unregister_services(hass: HomeAssistant) -> None:
@@ -212,5 +229,6 @@ def async_unregister_services(hass: HomeAssistant) -> None:
         SERVICE_REMOVE_EXPENSE,
         SERVICE_LIST_EXPENSES,
         SERVICE_LIST_TYPES,
+        SERVICE_REORDER_TYPES,
     ):
         hass.services.async_remove(DOMAIN, service)

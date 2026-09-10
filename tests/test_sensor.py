@@ -92,5 +92,9 @@ async def test_total_sensor_exposes_types_attribute(hass, tmp_path):
     await hass.async_block_till_done()
 
     total = hass.states.get("sensor.expense_tracker_total")
-    assert total.attributes["types"]["Groceries"] == "mdi:cart"
-    assert total.attributes["types"]["Transport"] == "mdi:car"
+    # A list of [name, icon] pairs in display order, not a dict -- see
+    # sensor.py's async_refresh docstring for why (order must survive
+    # HA's state-equality check for reorder_types to be observable here).
+    types = dict(total.attributes["types"])
+    assert types["Groceries"] == "mdi:cart"
+    assert types["Transport"] == "mdi:car"

@@ -212,14 +212,14 @@ async def test_add_type_updates_sensor_types_attribute_immediately(hass, tmp_pat
     )
 
     total = hass.states.get("sensor.expense_tracker_total")
-    assert "Subscriptions" in total.attributes["types"]
+    assert "Subscriptions" in dict(total.attributes["types"])
 
     await hass.services.async_call(
         DOMAIN, "remove_type", {"name": "Subscriptions"}, blocking=True
     )
 
     total = hass.states.get("sensor.expense_tracker_total")
-    assert "Subscriptions" not in total.attributes["types"]
+    assert "Subscriptions" not in dict(total.attributes["types"])
 
 
 async def test_list_expenses_service_returns_expenses_with_icons(hass, tmp_path):
@@ -272,7 +272,7 @@ async def test_add_type_then_remove_type_service(hass, tmp_path):
     )
 
     total = hass.states.get("sensor.expense_tracker_total")
-    assert "Subscriptions" not in total.attributes["types"]
+    assert "Subscriptions" not in dict(total.attributes["types"])
 
 
 async def test_remove_type_rejects_unknown_name(hass, tmp_path):
@@ -299,7 +299,7 @@ async def test_remove_type_service_rejects_when_in_use(hass, tmp_path):
 
     # Rejected removal must leave the type fully intact and usable.
     total = hass.states.get("sensor.expense_tracker_total")
-    assert "Groceries" in total.attributes["types"]
+    assert "Groceries" in dict(total.attributes["types"])
 
 
 async def test_remove_type_service_succeeds_once_expense_is_gone(hass, tmp_path):
@@ -322,7 +322,7 @@ async def test_remove_type_service_succeeds_once_expense_is_gone(hass, tmp_path)
     )
 
     total = hass.states.get("sensor.expense_tracker_total")
-    assert "Groceries" not in total.attributes["types"]
+    assert "Groceries" not in dict(total.attributes["types"])
 
 
 async def test_list_types_service_returns_usage_counts(hass, tmp_path):
@@ -341,6 +341,57 @@ async def test_list_types_service_returns_usage_counts(hass, tmp_path):
     assert by_name["Groceries"]["count"] == 1
     assert by_name["Groceries"]["icon"] == "mdi:cart"
     assert by_name["Transport"]["count"] == 0
+
+
+async def test_reorder_types_service_persists_order(hass, tmp_path):
+    await _setup(hass, tmp_path)
+    result = await hass.services.async_call(
+        DOMAIN, "list_types", {}, blocking=True, return_response=True
+    )
+    original = [t["name"] for t in result["types"]]
+    reversed_names = list(reversed(original))
+
+    await hass.services.async_call(
+        DOMAIN, "reorder_types", {"names": reversed_names}, blocking=True
+    )
+
+    result = await hass.services.async_call(
+        DOMAIN, "list_types", {}, blocking=True, return_response=True
+    )
+    assert [t["name"] for t in result["types"]] == reversed_names
+
+
+async def test_reorder_types_service_rejects_partial_list(hass, tmp_path):
+    await _setup(hass, tmp_path)
+    result = await hass.services.async_call(
+        DOMAIN, "list_types", {}, blocking=True, return_response=True
+    )
+    original = [t["name"] for t in result["types"]]
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN, "reorder_types", {"names": original[:-1]}, blocking=True
+        )
+
+
+async def test_reorder_types_updates_add_expense_sensor_attribute_order(
+    hass, tmp_path
+):
+    """The add-expense card's type picker reads sensor.expense_tracker_total's
+    `types` attribute -- it must reflect a reorder immediately, the same
+    way it already does for add_type/remove_type."""
+    await _setup(hass, tmp_path)
+    result = await hass.services.async_call(
+        DOMAIN, "list_types", {}, blocking=True, return_response=True
+    )
+    reversed_names = list(reversed([t["name"] for t in result["types"]]))
+
+    await hass.services.async_call(
+        DOMAIN, "reorder_types", {"names": reversed_names}, blocking=True
+    )
+
+    state = hass.states.get("sensor.expense_tracker_total")
+    assert [name for name, _icon in state.attributes["types"]] == reversed_names
 
 
 async def test_remove_expense_service_deletes_and_updates_sensor(hass, tmp_path):

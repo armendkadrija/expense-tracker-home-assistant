@@ -17,6 +17,14 @@
  * fire `value-changed` with `{value}` on selection. It wraps a searchable
  * combo box over the full MDI set but keeps `allow-custom-value`, so an
  * icon name typed directly still works.
+ *
+ * Row order is drag-and-drop reorderable via a grip handle, using Pointer
+ * Events (not the HTML5 Drag-and-Drop API) specifically so this works on
+ * touch -- native HTML5 drag-and-drop has no touch support on iOS/Android,
+ * which would silently break this on a phone dashboard, the single most
+ * common way to reach a Home Assistant UI. Persisted via
+ * expense_tracker.reorder_types (full-list replace, validated server-side
+ * against TypeSetMismatchError).
  */
 class ExpenseTrackerTypesCard extends HTMLElement {
   setConfig(config) {
@@ -80,6 +88,16 @@ class ExpenseTrackerTypesCard extends HTMLElement {
           border-bottom: 1px solid var(--divider-color);
         }
         .row:last-child { border-bottom: none; }
+        .row.dragging {
+          opacity: 0.6;
+          background: var(--secondary-background-color);
+        }
+        .row ha-icon.grip {
+          color: var(--secondary-text-color);
+          flex-shrink: 0;
+          cursor: grab;
+          touch-action: none;
+        }
         .row ha-icon.type-icon { color: var(--secondary-text-color); flex-shrink: 0; }
         .name { flex: 1; font-size: 14px; color: var(--primary-text-color); }
         .count {
@@ -205,8 +223,10 @@ class ExpenseTrackerTypesCard extends HTMLElement {
     for (const t of this._types) {
       const row = document.createElement("div");
       row.className = "row";
+      row.dataset.name = t.name;
       const inUse = t.count > 0;
       row.innerHTML = `
+        <ha-icon class="grip" icon="mdi:drag"></ha-icon>
         <ha-icon class="type-icon" icon="${t.icon}"></ha-icon>
         <span class="name">${this._escape(t.name)}</span>
         <span class="count">${
@@ -223,7 +243,70 @@ class ExpenseTrackerTypesCard extends HTMLElement {
           .querySelector(".delete")
           .addEventListener("click", () => this._deleteType(t.name));
       }
+      this._wireDrag(row.querySelector(".grip"), row);
       this._el.rows.appendChild(row);
+    }
+  }
+
+  // ---- drag-to-reorder (Pointer Events, not HTML5 DnD -- see the file
+  // header comment for why: HTML5 drag-and-drop doesn't work on touch) ----
+
+  _wireDrag(grip, row) {
+    grip.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      grip.setPointerCapture(e.pointerId);
+      row.classList.add("dragging");
+      this._drag = { pointerId: e.pointerId };
+    });
+
+    grip.addEventListener("pointermove", (e) => {
+      if (!this._drag || this._drag.pointerId !== e.pointerId) return;
+      const children = Array.from(this._el.rows.children);
+      const currentIndex = children.indexOf(row);
+      for (let i = 0; i < children.length; i++) {
+        if (i === currentIndex) continue;
+        const rect = children[i].getBoundingClientRect();
+        const midpoint = rect.top + rect.height / 2;
+        const movingDown = i > currentIndex;
+        if (movingDown && e.clientY >= midpoint) {
+          this._el.rows.insertBefore(row, children[i].nextSibling);
+          break;
+        }
+        if (!movingDown && e.clientY < midpoint) {
+          this._el.rows.insertBefore(row, children[i]);
+          break;
+        }
+      }
+    });
+
+    const finishDrag = (e) => {
+      if (!this._drag || this._drag.pointerId !== e.pointerId) return;
+      this._drag = null;
+      row.classList.remove("dragging");
+      this._persistOrder();
+    };
+    grip.addEventListener("pointerup", finishDrag);
+    grip.addEventListener("pointercancel", finishDrag);
+  }
+
+  async _persistOrder() {
+    const names = Array.from(this._el.rows.children)
+      .map((r) => r.dataset.name)
+      .filter(Boolean);
+    if (names.length < 2) return;
+    try {
+      await this._hass.callService("expense_tracker", "reorder_types", {
+        names,
+      });
+    } catch (err) {
+      this._setStatus((err && err.message) || "Failed to save order.", "error");
+    } finally {
+      // Resync this._types to the server's actual order either way -- on
+      // success this just confirms it; on failure it reverts the DOM's
+      // now-wrong order back to whatever the server still has, instead of
+      // leaving a locally-reordered view that doesn't match what was
+      // actually persisted.
+      await this._fetch();
     }
   }
 

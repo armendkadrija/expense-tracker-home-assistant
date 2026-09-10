@@ -3,7 +3,7 @@
 DOMAIN = "expense_tracker"
 DB_FILENAME = "expenses.db"
 RECEIPTS_DIR = "www/expense_tracker/receipts"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 3
 
 # Dashboard card JS, shipped by the integration and served via
 # hass.http.async_register_static_paths (see __init__.py), then

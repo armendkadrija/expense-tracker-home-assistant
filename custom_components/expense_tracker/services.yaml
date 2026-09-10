@@ -94,4 +94,16 @@ list_types:
   description: >
     Read-only: returns every expense type (name, icon, and how many
     expenses currently use it) -- a type with a nonzero count cannot be
-    removed.
+    removed. Returned in display order.
+
+reorder_types:
+  name: Reorder expense types
+  description: >
+    Set the display order of expense types. `names` must list every
+    existing type exactly once, in the desired order -- refused otherwise.
+  fields:
+    names:
+      required: true
+      example: '["Groceries", "Transport", "Other"]'
+      selector:
+        object:

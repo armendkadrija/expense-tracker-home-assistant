@@ -64,6 +64,14 @@ field is HA's own `ha-icon-picker` — full search over the MDI set, same
 widget the native UI uses for icon selectors — with a raw `mdi:...` string
 still accepted as a fallback.
 
+**Order is drag-and-drop, via the grip handle on each row.** It persists
+server-side (`expense_tracker.reorder_types`) and is the same order the
+Add-expense tab's type picker uses — dragging in one place changes both,
+immediately, no separate sync step. Reordering uses touch-compatible
+Pointer Events rather than the HTML5 Drag-and-Drop API, which has no
+touch support on iOS/Android and would otherwise silently not work from
+a phone.
+
 **A type in use can't be deleted — enforced server-side, not just hidden
 in the UI.** `expense_tracker.remove_type` checks for any expense still
 referencing that type name and refuses with a clear error if one exists

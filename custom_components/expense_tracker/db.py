@@ -13,10 +13,24 @@ from .const import DEFAULT_TYPES, SCHEMA_VERSION
 # Migrations as plain SQL strings, indexed by version: MIGRATIONS[i] is
 # the migration that takes the schema from version i to version i + 1.
 # No ORM, no migration framework - PRAGMA user_version plus this list is
-# the whole mechanism. Empty today (the schema hasn't changed since the
-# initial CREATE TABLE below), but initialize() already runs whatever
-# lands here for future SCHEMA_VERSION bumps.
-MIGRATIONS: list[str] = []
+# the whole mechanism. Each entry must be a single statement (see the
+# conn.execute call below, which runs exactly one statement per call).
+MIGRATIONS: list[str] = [
+    # v0 -> v1: no-op placeholder. The CREATE TABLE statements in
+    # initialize() already establish what shipped as schema version 1 --
+    # no real installation has ever run at version 0 -- but this index
+    # must stay reserved so the entries below land on the right version.
+    "SELECT 1",
+    # v1 -> v2: add the column expense-type ordering (drag-and-drop
+    # reordering, see reorder_types) is stored in.
+    "ALTER TABLE expense_types ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0",
+    # v2 -> v3: backfill sort_order for rows that predate the column,
+    # using their current alphabetical position -- keeps the visible
+    # order stable across the upgrade instead of jumbling to whatever
+    # order SQLite happens to return them in.
+    "UPDATE expense_types SET sort_order = ("
+    "SELECT COUNT(*) FROM expense_types e2 WHERE e2.name < expense_types.name)",
+]
 
 
 class DuplicateTypeError(ValueError):
@@ -37,6 +51,13 @@ class TypeInUseError(ValueError):
     is deliberately not a real foreign key (see remove_type's docstring
     and the spec's "not a real FK" note) -- there is no cascade to fall
     back on, so blocking the removal outright is the only safe choice."""
+
+
+class TypeSetMismatchError(ValueError):
+    """Raised when reorder_types isn't given exactly the current set of
+    type names. A partial list would leave the omitted types at whatever
+    sort_order they already had, silently interleaving them with the
+    reordered ones in a way nothing in the UI would explain."""
 
 
 class ExpenseDB:
@@ -67,8 +88,12 @@ class ExpenseDB:
             ).fetchone()[0]
             if count == 0:
                 conn.executemany(
-                    "INSERT INTO expense_types (name, icon) VALUES (?, ?)",
-                    DEFAULT_TYPES,
+                    "INSERT INTO expense_types (name, icon, sort_order) "
+                    "VALUES (?, ?, ?)",
+                    [
+                        (name, icon, i)
+                        for i, (name, icon) in enumerate(DEFAULT_TYPES)
+                    ],
                 )
             conn.commit()
         finally:
@@ -78,7 +103,7 @@ class ExpenseDB:
         conn = sqlite3.connect(self._db_path)
         try:
             rows = conn.execute(
-                "SELECT name, icon FROM expense_types ORDER BY name"
+                "SELECT name, icon FROM expense_types ORDER BY sort_order"
             ).fetchall()
             return rows
         finally:
@@ -95,8 +120,8 @@ class ExpenseDB:
                 "SELECT et.name, et.icon, COUNT(e.id) "
                 "FROM expense_types et "
                 "LEFT JOIN expenses e ON e.type_name = et.name "
-                "GROUP BY et.name, et.icon "
-                "ORDER BY et.name"
+                "GROUP BY et.name, et.icon, et.sort_order "
+                "ORDER BY et.sort_order"
             ).fetchall()
             return [
                 {"name": row[0], "icon": row[1], "count": row[2]} for row in rows
@@ -112,9 +137,40 @@ class ExpenseDB:
             ).fetchone()
             if existing:
                 raise DuplicateTypeError(f"Type '{name}' already exists")
+            # New types go at the end of the display order, not wherever
+            # SQLite happens to place them.
+            next_order = conn.execute(
+                "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM expense_types"
+            ).fetchone()[0]
             conn.execute(
-                "INSERT INTO expense_types (name, icon) VALUES (?, ?)",
-                (name, icon),
+                "INSERT INTO expense_types (name, icon, sort_order) "
+                "VALUES (?, ?, ?)",
+                (name, icon, next_order),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def reorder_types(self, ordered_names: list[str]) -> None:
+        """Persist a full drag-and-drop reorder. `ordered_names` must be
+        exactly the current set of type names, in their new order -- see
+        TypeSetMismatchError."""
+        conn = sqlite3.connect(self._db_path)
+        try:
+            existing_names = {
+                row[0]
+                for row in conn.execute("SELECT name FROM expense_types").fetchall()
+            }
+            if (
+                set(ordered_names) != existing_names
+                or len(ordered_names) != len(existing_names)
+            ):
+                raise TypeSetMismatchError(
+                    "Reorder must include every existing type exactly once"
+                )
+            conn.executemany(
+                "UPDATE expense_types SET sort_order = ? WHERE name = ?",
+                [(i, name) for i, name in enumerate(ordered_names)],
             )
             conn.commit()
         finally:
