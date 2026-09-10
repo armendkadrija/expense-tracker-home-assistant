@@ -250,43 +250,59 @@ class ExpenseTrackerTypesCard extends HTMLElement {
 
   // ---- drag-to-reorder (Pointer Events, not HTML5 DnD -- see the file
   // header comment for why: HTML5 drag-and-drop doesn't work on touch) ----
+  //
+  // pointermove/pointerup are bound to `window`, not the grip, and NOT via
+  // setPointerCapture. Reordering moves `row` to a new position among its
+  // siblings with insertBefore -- but per the DOM spec, inserting a node
+  // that's already in the tree does an implicit remove-then-reinsert, even
+  // within the same parent. Removing an element from the document releases
+  // any pointer capture on it, so the very first reorder-swap would kill a
+  // captured pointer: the drag would move exactly one position and then
+  // stop responding (confirmed live -- this was shipped once with capture
+  // and broke this way). Binding to `window` sidesteps the whole problem,
+  // since window is never removed from the document.
 
   _wireDrag(grip, row) {
     grip.addEventListener("pointerdown", (e) => {
       e.preventDefault();
-      grip.setPointerCapture(e.pointerId);
       row.classList.add("dragging");
       this._drag = { pointerId: e.pointerId };
-    });
 
-    grip.addEventListener("pointermove", (e) => {
-      if (!this._drag || this._drag.pointerId !== e.pointerId) return;
-      const children = Array.from(this._el.rows.children);
-      const currentIndex = children.indexOf(row);
-      for (let i = 0; i < children.length; i++) {
-        if (i === currentIndex) continue;
-        const rect = children[i].getBoundingClientRect();
-        const midpoint = rect.top + rect.height / 2;
-        const movingDown = i > currentIndex;
-        if (movingDown && e.clientY >= midpoint) {
-          this._el.rows.insertBefore(row, children[i].nextSibling);
-          break;
+      const onMove = (ev) => {
+        if (!this._drag || this._drag.pointerId !== ev.pointerId) return;
+        const children = Array.from(this._el.rows.children);
+        const currentIndex = children.indexOf(row);
+        if (currentIndex === -1) return; // rows got rebuilt mid-drag
+        for (let i = 0; i < children.length; i++) {
+          if (i === currentIndex) continue;
+          const rect = children[i].getBoundingClientRect();
+          const midpoint = rect.top + rect.height / 2;
+          const movingDown = i > currentIndex;
+          if (movingDown && ev.clientY >= midpoint) {
+            this._el.rows.insertBefore(row, children[i].nextSibling);
+            break;
+          }
+          if (!movingDown && ev.clientY < midpoint) {
+            this._el.rows.insertBefore(row, children[i]);
+            break;
+          }
         }
-        if (!movingDown && e.clientY < midpoint) {
-          this._el.rows.insertBefore(row, children[i]);
-          break;
-        }
-      }
-    });
+      };
 
-    const finishDrag = (e) => {
-      if (!this._drag || this._drag.pointerId !== e.pointerId) return;
-      this._drag = null;
-      row.classList.remove("dragging");
-      this._persistOrder();
-    };
-    grip.addEventListener("pointerup", finishDrag);
-    grip.addEventListener("pointercancel", finishDrag);
+      const onUp = (ev) => {
+        if (!this._drag || this._drag.pointerId !== ev.pointerId) return;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+        this._drag = null;
+        row.classList.remove("dragging");
+        this._persistOrder();
+      };
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+    });
   }
 
   async _persistOrder() {
