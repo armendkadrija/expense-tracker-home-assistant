@@ -23,14 +23,43 @@ swallowed, never allowed to break integration setup.
 """
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 
 from homeassistant.core import HomeAssistant
-from homeassistant.loader import async_get_integration
 
-from .const import CARD_FILES, DOMAIN, STATIC_URL_PREFIX
+from .const import CARD_FILES, STATIC_URL_PREFIX
 
 _LOGGER = logging.getLogger(__name__)
+
+_MANIFEST_PATH = Path(__file__).parent / "manifest.json"
+
+
+def _read_integration_version() -> str:
+    """Read this integration's own version straight from manifest.json on
+    disk, every call -- deliberately NOT via homeassistant.loader's
+    async_get_integration.
+
+    That loader API caches the parsed Integration object (including its
+    manifest) in hass.data for the lifetime of the HA process
+    (homeassistant/loader.py's async_get_integrations, keyed by domain).
+    A config-entry reload re-runs this module's setup code but does NOT
+    clear that cache -- confirmed live: after `homeassistant.
+    reload_config_entry` following a version bump, this returned the
+    OLD version, and the resource URL below stayed on the stale
+    ?v=<old> for anyone hitting a cache that already had it. Only a full
+    HA restart clears hass.data. Reading the file directly sidesteps that
+    entirely: HACS writes the new manifest.json to disk immediately on
+    download, so this always reflects what's actually installed, restart
+    or not.
+    """
+    try:
+        with _MANIFEST_PATH.open(encoding="utf-8") as handle:
+            return str(json.load(handle)["version"])
+    except (OSError, ValueError, KeyError):
+        _LOGGER.exception("Could not read own manifest.json for version info")
+        return "0"
 
 
 async def async_register_dashboard_resources(hass: HomeAssistant) -> None:
@@ -47,8 +76,15 @@ async def async_register_dashboard_resources(hass: HomeAssistant) -> None:
     even past a hard client-side cache-bypass fetch). Changing the URL on
     every version is the standard fix: a stale cached response just stops
     being referenced by anything, instead of needing an edge purge.
-    `async_get_integration` (homeassistant.loader) is the public API for
-    reading our own manifest version at runtime.
+
+    If more than one existing resource matches a given card file (which
+    can happen from earlier bugs in this same function, or from a user
+    having added one manually before this existed), every run consolidates
+    them down to exactly one -- deleting the extras -- rather than leaving
+    duplicates to accumulate. Confirmed live: without this, a stale-version
+    run (see _read_integration_version's docstring) that found zero
+    matches due to an unrelated timing issue created a fresh duplicate
+    instead of updating the existing ones.
     """
     try:
         from homeassistant.components.lovelace.const import LOVELACE_DATA
@@ -62,8 +98,7 @@ async def async_register_dashboard_resources(hass: HomeAssistant) -> None:
             )
             return
 
-        integration = await async_get_integration(hass, DOMAIN)
-        version = str(integration.version)
+        version = _read_integration_version()
 
         existing_items = lovelace_data.resources.async_items() or []
         for name in CARD_FILES:
@@ -79,11 +114,13 @@ async def async_register_dashboard_resources(hass: HomeAssistant) -> None:
                     {"res_type": "module", "url": versioned_url}
                 )
                 continue
-            for item in matches:
-                if item.get("url") != versioned_url:
-                    await lovelace_data.resources.async_update_item(
-                        item["id"], {"url": versioned_url}
-                    )
+            survivor, *extras = matches
+            for extra in extras:
+                await lovelace_data.resources.async_delete_item(extra["id"])
+            if survivor.get("url") != versioned_url:
+                await lovelace_data.resources.async_update_item(
+                    survivor["id"], {"url": versioned_url}
+                )
     except Exception:  # noqa: BLE001 - best-effort only, see module docstring
         _LOGGER.exception(
             "Could not automatically register dashboard resources. Add "

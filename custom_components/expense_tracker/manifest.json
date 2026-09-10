@@ -1,7 +1,7 @@
 {
   "domain": "expense_tracker",
   "name": "Expense Tracker",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "config_flow": true,
   "dependencies": ["file_upload"],
   "documentation": "https://github.com/armendkadrija/expense-tracker-home-assistant",

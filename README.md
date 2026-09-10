@@ -38,7 +38,21 @@ Types) built from three custom cards this integration ships:
   stale card file for up to a month after an update, hard browser refresh
   or not. Bumping the version changes the URL, which is what actually
   invalidates it, and setup updates the existing resource entry in place
-  on every restart so this stays automatic.
+  on every restart so this stays automatic. This version is read straight
+  from `manifest.json` on disk on every call, deliberately not through
+  `homeassistant.loader`'s `async_get_integration` — that caches the
+  parsed manifest for the life of the HA process, so a config-entry
+  reload (rather than a full restart) would keep reporting the old
+  version and never actually bust the cache.
+
+**A Python code change always needs a full Home Assistant restart** —
+Python caches an already-imported module for the life of the process, so
+re-running setup via a config-entry reload executes the *old* code, not
+whatever HACS just wrote to disk. A JS-only release (a card file plus a
+manifest version bump, no `.py` changes) is different: `Settings → Devices
+& Services → Expense Tracker → ⋯ → Reload` is enough, since the version
+lookup above re-reads `manifest.json` fresh every time rather than relying
+on anything cached.
 
 **One thing it genuinely cannot do:** create the dashboard itself.
 Verified directly against the source — the object that owns dashboard
