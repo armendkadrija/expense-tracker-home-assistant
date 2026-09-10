@@ -26,16 +26,30 @@ from __future__ import annotations
 import logging
 
 from homeassistant.core import HomeAssistant
+from homeassistant.loader import async_get_integration
 
-from .const import CARD_FILES, STATIC_URL_PREFIX
+from .const import CARD_FILES, DOMAIN, STATIC_URL_PREFIX
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_register_dashboard_resources(hass: HomeAssistant) -> None:
-    """Register this integration's card JS as Lovelace resources, if not
-    already registered. Idempotent (checked by URL) and never raises --
-    worst case, the user adds the two resources manually per the README."""
+    """Register this integration's card JS as Lovelace resources, creating
+    or updating them as needed. Idempotent and never raises -- worst case,
+    the user adds the resources manually per the README.
+
+    Each URL carries a `?v=<integration version>` query string. This isn't
+    cosmetic: the static files are served with a 31-day Cache-Control (see
+    __init__.py's _async_register_static_files), and on deployments that
+    additionally sit behind a CDN, that header gets honored at the edge --
+    verified live on this project's own instance (Cloudflare,
+    cf-cache-status: HIT serving a stale card file after a version bump,
+    even past a hard client-side cache-bypass fetch). Changing the URL on
+    every version is the standard fix: a stale cached response just stops
+    being referenced by anything, instead of needing an edge purge.
+    `async_get_integration` (homeassistant.loader) is the public API for
+    reading our own manifest version at runtime.
+    """
     try:
         from homeassistant.components.lovelace.const import LOVELACE_DATA
 
@@ -43,22 +57,33 @@ async def async_register_dashboard_resources(hass: HomeAssistant) -> None:
         if lovelace_data is None:
             _LOGGER.debug(
                 "Lovelace isn't loaded yet; skipping automatic dashboard "
-                "resource registration. Add the two resources manually "
+                "resource registration. Add the resources manually "
                 "(see README) if this integration's cards don't load."
             )
             return
 
-        existing_urls = {
-            item.get("url")
-            for item in (lovelace_data.resources.async_items() or [])
-        }
+        integration = await async_get_integration(hass, DOMAIN)
+        version = str(integration.version)
+
+        existing_items = lovelace_data.resources.async_items() or []
         for name in CARD_FILES:
-            url = f"{STATIC_URL_PREFIX}/{name}"
-            if url in existing_urls:
+            base_url = f"{STATIC_URL_PREFIX}/{name}"
+            versioned_url = f"{base_url}?v={version}"
+            matches = [
+                item
+                for item in existing_items
+                if item.get("url", "").split("?", 1)[0] == base_url
+            ]
+            if not matches:
+                await lovelace_data.resources.async_create_item(
+                    {"res_type": "module", "url": versioned_url}
+                )
                 continue
-            await lovelace_data.resources.async_create_item(
-                {"res_type": "module", "url": url}
-            )
+            for item in matches:
+                if item.get("url") != versioned_url:
+                    await lovelace_data.resources.async_update_item(
+                        item["id"], {"url": versioned_url}
+                    )
     except Exception:  # noqa: BLE001 - best-effort only, see module docstring
         _LOGGER.exception(
             "Could not automatically register dashboard resources. Add "

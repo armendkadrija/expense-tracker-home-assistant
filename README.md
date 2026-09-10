@@ -31,6 +31,14 @@ Types) built from three custom cards this integration ships:
   HA's versioned `homeassistant.helpers.*` contract — so this step is
   wrapped defensively and just logs a warning if it ever fails on some
   future HA version, rather than breaking setup.
+- Each resource URL carries `?v=<integration version>`. The static files
+  are served with a 31-day `Cache-Control`, and on a deployment that sits
+  behind a CDN (verified against this project's own instance, Cloudflare)
+  that header gets honored at the edge — a bare URL can keep serving a
+  stale card file for up to a month after an update, hard browser refresh
+  or not. Bumping the version changes the URL, which is what actually
+  invalidates it, and setup updates the existing resource entry in place
+  on every restart so this stays automatic.
 
 **One thing it genuinely cannot do:** create the dashboard itself.
 Verified directly against the source — the object that owns dashboard
@@ -51,7 +59,10 @@ directly instead — that's how it was originally set up.
 
 The "Types" tab lists every type with an icon and a usage count, a form
 to add new ones, and a delete button per row. Types ship seeded with
-Groceries, Transport, Utilities, Health, Entertainment, Other.
+Groceries, Transport, Utilities, Health, Entertainment, Other. The icon
+field is HA's own `ha-icon-picker` — full search over the MDI set, same
+widget the native UI uses for icon selectors — with a raw `mdi:...` string
+still accepted as a fallback.
 
 **A type in use can't be deleted — enforced server-side, not just hidden
 in the UI.** `expense_tracker.remove_type` checks for any expense still
