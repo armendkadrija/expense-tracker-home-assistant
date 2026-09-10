@@ -10,6 +10,13 @@
  * shape as expense-tracker-list-card.js) and disables the delete button
  * for anything in use, but even if that were bypassed the backend still
  * refuses the removal.
+ *
+ * The icon field uses <ha-icon-picker>, a global custom element the HA
+ * frontend itself uses for every native icon selector -- confirmed live
+ * (2026.9.1) to render with no .hass set, expose a `value` property, and
+ * fire `value-changed` with `{value}` on selection. It wraps a searchable
+ * combo box over the full MDI set but keeps `allow-custom-value`, so an
+ * icon name typed directly still works.
  */
 class ExpenseTrackerTypesCard extends HTMLElement {
   setConfig(config) {
@@ -23,6 +30,7 @@ class ExpenseTrackerTypesCard extends HTMLElement {
       this._render();
       this._fetch();
     } else {
+      if (this._el) this._el.newIcon.hass = hass;
       this._maybeRefetch();
     }
   }
@@ -133,8 +141,8 @@ class ExpenseTrackerTypesCard extends HTMLElement {
           font-size: 12px;
           color: var(--primary-color);
         }
-        .icon-field { display: flex; align-items: center; gap: 8px; }
-        .icon-preview { flex-shrink: 0; color: var(--secondary-text-color); }
+        .icon-field { display: flex; }
+        .icon-field ha-icon-picker { width: 100%; }
         .add-btn {
           flex-shrink: 0;
           display: flex;
@@ -165,9 +173,7 @@ class ExpenseTrackerTypesCard extends HTMLElement {
             <label for="newName">New type</label>
           </div>
           <div class="field icon-field">
-            <ha-icon class="icon-preview" id="iconPreview" icon="mdi:help-circle-outline"></ha-icon>
-            <input type="text" id="newIcon" placeholder=" " value="mdi:tag">
-            <label for="newIcon">Icon (mdi:...)</label>
+            <ha-icon-picker id="newIcon" label="Icon"></ha-icon-picker>
           </div>
           <button class="add-btn" id="addBtn" title="Add type">
             <ha-icon icon="mdi:plus"></ha-icon>
@@ -181,15 +187,12 @@ class ExpenseTrackerTypesCard extends HTMLElement {
       rows: root.getElementById("rows"),
       newName: root.getElementById("newName"),
       newIcon: root.getElementById("newIcon"),
-      iconPreview: root.getElementById("iconPreview"),
       addBtn: root.getElementById("addBtn"),
       status: root.getElementById("status"),
     };
 
-    this._el.newIcon.addEventListener("input", () => {
-      const value = this._el.newIcon.value.trim() || "mdi:help-circle-outline";
-      this._el.iconPreview.setAttribute("icon", value);
-    });
+    this._el.newIcon.value = "mdi:tag";
+    if (this._hass) this._el.newIcon.hass = this._hass;
     this._el.addBtn.addEventListener("click", () => this._addType());
   }
 
@@ -237,7 +240,7 @@ class ExpenseTrackerTypesCard extends HTMLElement {
 
   async _addType() {
     const name = this._el.newName.value.trim();
-    const icon = this._el.newIcon.value.trim();
+    const icon = (this._el.newIcon.value || "").trim();
     if (!name) {
       this._setStatus("Enter a name.", "error");
       return;
@@ -252,7 +255,6 @@ class ExpenseTrackerTypesCard extends HTMLElement {
       await this._hass.callService("expense_tracker", "add_type", { name, icon });
       this._el.newName.value = "";
       this._el.newIcon.value = "mdi:tag";
-      this._el.iconPreview.setAttribute("icon", "mdi:tag");
       await this._fetch();
     } catch (err) {
       this._setStatus((err && err.message) || "Failed to add type.", "error");
