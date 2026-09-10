@@ -41,6 +41,13 @@ def _read_integration_version() -> str:
     disk, every call -- deliberately NOT via homeassistant.loader's
     async_get_integration.
 
+    Blocking file I/O -- callers MUST run this via
+    hass.async_add_executor_job, never directly on the event loop. (Shipped
+    once without that: HA's blocking-call detector caught it live --
+    `.open()` inside `async_register_dashboard_resources`, a hard rule
+    this project otherwise holds everywhere else, missed here because this
+    function reads like a cheap in-memory lookup rather than file I/O.)
+
     That loader API caches the parsed Integration object (including its
     manifest) in hass.data for the lifetime of the HA process
     (homeassistant/loader.py's async_get_integrations, keyed by domain).
@@ -98,7 +105,7 @@ async def async_register_dashboard_resources(hass: HomeAssistant) -> None:
             )
             return
 
-        version = _read_integration_version()
+        version = await hass.async_add_executor_job(_read_integration_version)
 
         existing_items = lovelace_data.resources.async_items() or []
         for name in CARD_FILES:
